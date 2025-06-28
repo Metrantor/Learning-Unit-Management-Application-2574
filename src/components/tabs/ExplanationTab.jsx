@@ -5,18 +5,53 @@ import MDEditor from '@uiw/react-md-editor';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiTarget, FiImage, FiUpload, FiClipboard, FiTrash2, FiEye, FiCopy } = FiIcons;
+const { FiTarget, FiImage, FiUpload, FiClipboard, FiTrash2, FiEye, FiCopy, FiMessageCircle, FiSend, FiUser } = FiIcons;
 
 const ExplanationTab = ({ unit }) => {
-  const { updateLearningUnit, getTopic } = useLearningUnits();
+  const { updateLearningUnit, getTopic, currentUser } = useLearningUnits();
   const [explanation, setExplanation] = useState(unit.explanation || '');
   const [imageName, setImageName] = useState('');
   const [showImageNameDialog, setShowImageNameDialog] = useState(false);
   const [pendingImageData, setPendingImageData] = useState(null);
+  const [newComment, setNewComment] = useState('');
 
   const handleChange = (value) => {
     setExplanation(value || '');
     updateLearningUnit(unit.id, { explanation: value || '' });
+  };
+
+  // Comment Management for Explanation
+  const handleAddComment = () => {
+    if (!newComment.trim()) return;
+
+    const newCommentObj = {
+      id: uuidv4(),
+      content: newComment.trim(),
+      author: currentUser,
+      createdAt: new Date().toISOString(),
+      context: 'explanation' // Mark as explanation comment
+    };
+
+    const updatedComments = [newCommentObj, ...(unit.explanationComments || [])]; // Add to beginning for newest first
+    updateLearningUnit(unit.id, { explanationComments: updatedComments });
+    setNewComment('');
+  };
+
+  const handleDeleteComment = (commentId) => {
+    if (window.confirm('Möchten Sie diesen Kommentar wirklich löschen?')) {
+      const updatedComments = (unit.explanationComments || []).filter(comment => comment.id !== commentId);
+      updateLearningUnit(unit.id, { explanationComments: updatedComments });
+    }
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   // Helper function to generate smart filename for explanation images
@@ -24,14 +59,14 @@ const ExplanationTab = ({ unit }) => {
     const topic = unit.topicId ? getTopic(unit.topicId) : null;
     const topicName = topic?.title || '';
     const unitName = unit.title || '';
-    
+
     // Create abbreviated versions
     const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
     const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
-    
+
     // Use original name if provided, otherwise generate generic name
     const baseName = originalName.replace(/\.[^/.]+$/, "") || `Erklaerung_${Date.now()}`;
-    
+
     if (topicAbbr && unitAbbr) {
       return `${topicAbbr}_${unitAbbr}_${baseName}`;
     } else if (unitAbbr) {
@@ -48,10 +83,7 @@ const ExplanationTab = ({ unit }) => {
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (event) => {
-          const imageData = {
-            file,
-            url: event.target.result
-          };
+          const imageData = { file, url: event.target.result };
           setPendingImageData(imageData);
           setImageName(generateSmartFilename(file.name));
           setShowImageNameDialog(true);
@@ -77,7 +109,6 @@ const ExplanationTab = ({ unit }) => {
 
       const updatedImages = [...(unit.images || []), newImage];
       updateLearningUnit(unit.id, { images: updatedImages });
-
       setShowImageNameDialog(false);
       setPendingImageData(null);
       setImageName('');
@@ -93,10 +124,7 @@ const ExplanationTab = ({ unit }) => {
             const blob = await clipboardItem.getType(type);
             const reader = new FileReader();
             reader.onload = (event) => {
-              setPendingImageData({
-                file: blob,
-                url: event.target.result
-              });
+              setPendingImageData({ file: blob, url: event.target.result });
               setImageName(generateSmartFilename(`Erklaerung_Zwischenablage_${new Date().toISOString().slice(0, 10)}`));
               setShowImageNameDialog(true);
             };
@@ -208,7 +236,6 @@ const ExplanationTab = ({ unit }) => {
             </button>
           </div>
         </div>
-
         {unit.images && unit.images.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {unit.images.map((image) => (
@@ -272,7 +299,6 @@ const ExplanationTab = ({ unit }) => {
             </p>
           </div>
         )}
-
         <input
           id="explanationImageUpload"
           type="file"
@@ -304,11 +330,7 @@ const ExplanationTab = ({ unit }) => {
             data-color-mode="auto"
             textareaProps={{
               placeholder: 'Schreiben Sie hier Ihre schriftliche Erklärung...\n\n**Sie können Markdown verwenden:**\n- **Fett** oder *kursiv*\n- [Links](http://example.com)\n- ![Bilder](url)\n- Listen und mehr',
-              style: {
-                fontSize: 14,
-                lineHeight: 1.5,
-                minHeight: 400
-              }
+              style: { fontSize: 14, lineHeight: 1.5, minHeight: 400 }
             }}
           />
         </div>
@@ -323,6 +345,101 @@ const ExplanationTab = ({ unit }) => {
           </div>
         </div>
       )}
+
+      {/* Comments Section for Explanation */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center">
+            <SafeIcon icon={FiMessageCircle} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Anmerkungen zur Erklärung</h3>
+            {unit.explanationComments && unit.explanationComments.length > 0 && (
+              <span className="ml-2 px-2 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 text-xs rounded-full">
+                {unit.explanationComments.length}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="p-4">
+          {/* Add Comment */}
+          <div className="mb-6">
+            <div className="flex space-x-3">
+              <div className="flex-shrink-0">
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-8 h-8 rounded-full"
+                />
+              </div>
+              <div className="flex-1">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Anmerkung zur schriftlichen Erklärung hinzufügen..."
+                />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                    className="inline-flex items-center px-3 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                  >
+                    <SafeIcon icon={FiSend} className="h-4 w-4 mr-2" />
+                    Anmerkung senden
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Comments List - Newest First */}
+          {unit.explanationComments && unit.explanationComments.length > 0 ? (
+            <div className="space-y-4">
+              {unit.explanationComments.map((comment) => (
+                <div key={comment.id} className="flex space-x-3">
+                  <div className="flex-shrink-0">
+                    <img
+                      src={comment.author.avatar}
+                      alt={comment.author.name}
+                      className="w-8 h-8 rounded-full"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                          {comment.author.name}
+                        </h4>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatDate(comment.createdAt)}
+                          </span>
+                          {comment.author.id === currentUser.id && (
+                            <button
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                            >
+                              <SafeIcon icon={FiTrash2} className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {comment.content}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+              Noch keine Anmerkungen zur schriftlichen Erklärung vorhanden.
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Image Name Dialog */}
       {showImageNameDialog && (

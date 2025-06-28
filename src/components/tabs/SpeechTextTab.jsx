@@ -3,10 +3,10 @@ import { useLearningUnits } from '../../context/LearningUnitContext';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiZap, FiLoader, FiMessageCircle, FiSend, FiUser } = FiIcons;
+const { FiZap, FiLoader, FiMessageCircle, FiSend, FiUser, FiTrash2 } = FiIcons;
 
 const SpeechTextTab = ({ unit }) => {
-  const { updateLearningUnit, processTextToSnippets, addComment } = useLearningUnits();
+  const { updateLearningUnit, processTextToSnippets, currentUser } = useLearningUnits();
   const [speechText, setSpeechText] = useState(unit.speechText || '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -43,9 +43,25 @@ const SpeechTextTab = ({ unit }) => {
 
   const handleAddComment = () => {
     if (!newComment.trim()) return;
-    
-    addComment(unit.id, null, newComment.trim(), true);
+
+    const newCommentObj = {
+      id: Date.now().toString(),
+      content: newComment.trim(),
+      author: currentUser,
+      createdAt: new Date().toISOString(),
+      context: 'speechtext'
+    };
+
+    const updatedComments = [newCommentObj, ...(unit.speechTextComments || [])]; // Add to beginning for newest first
+    updateLearningUnit(unit.id, { speechTextComments: updatedComments });
     setNewComment('');
+  };
+
+  const handleDeleteComment = (commentId) => {
+    if (window.confirm('Möchten Sie diesen Kommentar wirklich löschen?')) {
+      const updatedComments = (unit.speechTextComments || []).filter(comment => comment.id !== commentId);
+      updateLearningUnit(unit.id, { speechTextComments: updatedComments });
+    }
   };
 
   const formatDate = (dateString) => {
@@ -82,7 +98,6 @@ const SpeechTextTab = ({ unit }) => {
             {isProcessing ? 'Verarbeite...' : 'In Snippets zerlegen'}
           </button>
         </div>
-        
         <div className="p-4">
           <textarea
             value={speechText}
@@ -91,14 +106,9 @@ const SpeechTextTab = ({ unit }) => {
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             placeholder="Geben Sie hier den Sprechtext ein, der später in kleinere Snippets zerlegt werden soll..."
           />
-          
           <div className="mt-2 flex justify-between text-sm text-gray-500 dark:text-gray-400">
-            <span>
-              {speechText.length} Zeichen
-            </span>
-            <span>
-              {speechText.split(/\s+/).filter(word => word.length > 0).length} Wörter
-            </span>
+            <span>{speechText.length} Zeichen</span>
+            <span>{speechText.split(/\s+/).filter(word => word.length > 0).length} Wörter</span>
           </div>
         </div>
       </div>
@@ -108,15 +118,14 @@ const SpeechTextTab = ({ unit }) => {
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
             <SafeIcon icon={FiMessageCircle} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Kommentare</h3>
-            {unit.comments && unit.comments.length > 0 && (
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Anmerkungen zum Sprechtext</h3>
+            {unit.speechTextComments && unit.speechTextComments.length > 0 && (
               <span className="ml-2 px-2 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 text-xs rounded-full">
-                {unit.comments.length}
+                {unit.speechTextComments.length}
               </span>
             )}
           </div>
         </div>
-
         <div className="p-4">
           {/* Add Comment */}
           <div className="mb-6">
@@ -132,7 +141,7 @@ const SpeechTextTab = ({ unit }) => {
                   onChange={(e) => setNewComment(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Kommentar hinzufügen..."
+                  placeholder="Anmerkung zum Sprechtext hinzufügen..."
                 />
                 <div className="mt-2 flex justify-end">
                   <button
@@ -141,17 +150,17 @@ const SpeechTextTab = ({ unit }) => {
                     className="inline-flex items-center px-3 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                   >
                     <SafeIcon icon={FiSend} className="h-4 w-4 mr-2" />
-                    Kommentar senden
+                    Anmerkung senden
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Comments List */}
-          {unit.comments && unit.comments.length > 0 ? (
+          {/* Comments List - Newest First */}
+          {unit.speechTextComments && unit.speechTextComments.length > 0 ? (
             <div className="space-y-4">
-              {unit.comments.map((comment) => (
+              {unit.speechTextComments.map((comment) => (
                 <div key={comment.id} className="flex space-x-3">
                   <div className="flex-shrink-0">
                     <img
@@ -166,11 +175,21 @@ const SpeechTextTab = ({ unit }) => {
                         <h4 className="text-sm font-medium text-gray-900 dark:text-white">
                           {comment.author.name}
                         </h4>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(comment.createdAt)}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatDate(comment.createdAt)}
+                          </span>
+                          {comment.author.id === currentUser.id && (
+                            <button
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                            >
+                              <SafeIcon icon={FiTrash2} className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{comment.content}</p>
                     </div>
                   </div>
                 </div>
@@ -178,7 +197,7 @@ const SpeechTextTab = ({ unit }) => {
             </div>
           ) : (
             <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-              Noch keine Kommentare vorhanden. Seien Sie der Erste!
+              Noch keine Anmerkungen zum Sprechtext vorhanden.
             </p>
           )}
         </div>

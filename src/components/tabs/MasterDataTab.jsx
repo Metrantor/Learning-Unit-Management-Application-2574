@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiVideo, FiPlay } = FiIcons;
+const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen } = FiIcons;
 
 const MasterDataTab = ({ unit }) => {
   const { updateLearningUnit, topics, getTopic } = useLearningUnits();
@@ -13,10 +13,9 @@ const MasterDataTab = ({ unit }) => {
   const [imageName, setImageName] = useState('');
   const [showImageNameDialog, setShowImageNameDialog] = useState(false);
   const [showUrlDialog, setShowUrlDialog] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [pendingImageData, setPendingImageData] = useState(null);
-  const [isVideoUploading, setIsVideoUploading] = useState(false);
   const fileInputRef = useRef(null);
-  const videoInputRef = useRef(null);
 
   const handleUpdate = (updates) => {
     updateLearningUnit(unit.id, updates);
@@ -26,16 +25,22 @@ const MasterDataTab = ({ unit }) => {
     handleUpdate({ [field]: value });
   };
 
+  // Topic Move Function
+  const handleMoveToTopic = (newTopicId) => {
+    const targetTopic = getTopic(newTopicId);
+    if (window.confirm(`Möchten Sie diese Lerneinheit wirklich zu "${targetTopic?.title}" verschieben?`)) {
+      handleUpdate({ topicId: newTopicId });
+      setShowMoveDialog(false);
+      alert(`Lerneinheit erfolgreich zu "${targetTopic?.title}" verschoben!`);
+    }
+  };
+
   // Learning Goals Management
   const addGoal = () => {
     if (!newGoal.trim()) return;
     const updatedGoals = [
       ...unit.learningGoals,
-      {
-        id: uuidv4(),
-        text: newGoal.trim(),
-        createdAt: new Date().toISOString()
-      }
+      { id: uuidv4(), text: newGoal.trim(), createdAt: new Date().toISOString() }
     ];
     handleUpdate({ learningGoals: updatedGoals });
     setNewGoal('');
@@ -51,12 +56,7 @@ const MasterDataTab = ({ unit }) => {
     if (!newUrl.title.trim() || !newUrl.url.trim()) return;
     const updatedUrls = [
       ...(unit.urls || []),
-      {
-        id: uuidv4(),
-        title: newUrl.title.trim(),
-        url: newUrl.url.trim(),
-        createdAt: new Date().toISOString()
-      }
+      { id: uuidv4(), title: newUrl.title.trim(), url: newUrl.url.trim(), createdAt: new Date().toISOString() }
     ];
     handleUpdate({ urls: updatedUrls });
     setNewUrl({ title: '', url: '' });
@@ -105,91 +105,19 @@ const MasterDataTab = ({ unit }) => {
     }
   };
 
-  // Video File Management - Fixed version
-  const handleVideoUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('video/')) {
-      alert('Bitte wählen Sie eine Videodatei aus.');
-      return;
-    }
-
-    // Check file size (limit to 500MB for better compatibility)
-    const maxSize = 500 * 1024 * 1024; // 500MB
-    if (file.size > maxSize) {
-      alert('Die Videodatei ist zu groß. Maximale Größe: 500MB');
-      return;
-    }
-
-    setIsVideoUploading(true);
-
-    try {
-      // Create object URL instead of reading as data URL for better performance
-      const videoUrl = URL.createObjectURL(file);
-      
-      const videoData = {
-        id: uuidv4(),
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: videoUrl,
-        uploadedAt: new Date().toISOString()
-      };
-
-      handleUpdate({ video: videoData });
-      setIsVideoUploading(false);
-    } catch (error) {
-      console.error('Error uploading video:', error);
-      alert('Fehler beim Upload der Videodatei.');
-      setIsVideoUploading(false);
-    }
-
-    // Reset input
-    if (videoInputRef.current) {
-      videoInputRef.current.value = '';
-    }
-  };
-
-  const handleVideoRemove = () => {
-    if (window.confirm('Möchten Sie das Video wirklich entfernen?')) {
-      // Revoke object URL to free memory
-      if (unit.video && unit.video.url) {
-        URL.revokeObjectURL(unit.video.url);
-      }
-      handleUpdate({ video: null });
-    }
-  };
-
-  const handleVideoDownload = () => {
-    if (unit.video) {
-      try {
-        const link = document.createElement('a');
-        link.href = unit.video.url;
-        link.download = unit.video.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } catch (error) {
-        console.error('Error downloading video:', error);
-        alert('Fehler beim Download der Videodatei.');
-      }
-    }
-  };
-
   // Helper function to generate smart filename
   const generateSmartFilename = (originalName = '') => {
     const topic = unit.topicId ? getTopic(unit.topicId) : null;
     const topicName = topic?.title || '';
     const unitName = unit.title || '';
-    
+
     // Create abbreviated versions
     const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
     const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
-    
+
     // Use original name if provided, otherwise generate generic name
     const baseName = originalName.replace(/\.[^/.]+$/, "") || `Bild_${Date.now()}`;
-    
+
     if (topicAbbr && unitAbbr) {
       return `${topicAbbr}_${unitAbbr}_${baseName}`;
     } else if (unitAbbr) {
@@ -206,10 +134,7 @@ const MasterDataTab = ({ unit }) => {
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (event) => {
-          const imageData = {
-            file,
-            url: event.target.result
-          };
+          const imageData = { file, url: event.target.result };
           setPendingImageData(imageData);
           setImageName(generateSmartFilename(file.name));
           setShowImageNameDialog(true);
@@ -231,10 +156,8 @@ const MasterDataTab = ({ unit }) => {
         url: pendingImageData.url,
         uploadedAt: new Date().toISOString()
       };
-
       const updatedImages = [...(unit.images || []), newImage];
       handleUpdate({ images: updatedImages });
-
       setShowImageNameDialog(false);
       setPendingImageData(null);
       setImageName('');
@@ -250,10 +173,7 @@ const MasterDataTab = ({ unit }) => {
             const blob = await clipboardItem.getType(type);
             const reader = new FileReader();
             reader.onload = (event) => {
-              setPendingImageData({
-                file: blob,
-                url: event.target.result
-              });
+              setPendingImageData({ file: blob, url: event.target.result });
               setImageName(generateSmartFilename(`Zwischenablage_${new Date().toISOString().slice(0, 10)}`));
               setShowImageNameDialog(true);
             };
@@ -304,11 +224,22 @@ const MasterDataTab = ({ unit }) => {
 
   return (
     <div className="space-y-8">
-      {/* Topic Assignment */}
+      {/* Topic Assignment with Move Function */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center mb-4">
-          <SafeIcon icon={FiFolder} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Thema-Zuordnung</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <SafeIcon icon={FiFolder} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Thema-Zuordnung</h3>
+          </div>
+          {unit.topicId && (
+            <button
+              onClick={() => setShowMoveDialog(true)}
+              className="inline-flex items-center px-3 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm"
+            >
+              <SafeIcon icon={FiMove} className="h-4 w-4 mr-2" />
+              Verschieben
+            </button>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -326,8 +257,47 @@ const MasterDataTab = ({ unit }) => {
               </option>
             ))}
           </select>
+          {unit.topicId && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              💡 Verwenden Sie "Verschieben", um diese Lerneinheit zu einem anderen Thema zu verschieben.
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Move to Topic Dialog */}
+      {showMoveDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Lerneinheit verschieben</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Wählen Sie das Zielthema für diese Lerneinheit:
+            </p>
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {topics.filter(topic => topic.id !== unit.topicId).map((topic) => (
+                <button
+                  key={topic.id}
+                  onClick={() => handleMoveToTopic(topic.id)}
+                  className="w-full text-left p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900 transition-colors"
+                >
+                  <div className="font-medium text-gray-900 dark:text-white">{topic.title}</div>
+                  {topic.description && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{topic.description}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowMoveDialog(false)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Basic Information */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
@@ -457,7 +427,6 @@ const MasterDataTab = ({ unit }) => {
             URL hinzufügen
           </button>
         </div>
-
         {unit.urls && unit.urls.length > 0 ? (
           <div className="space-y-3">
             {unit.urls.map((url) => (
@@ -500,7 +469,6 @@ const MasterDataTab = ({ unit }) => {
           <SafeIcon icon={FiFile} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">PowerPoint-Datei</h3>
         </div>
-
         {unit.powerPointFile ? (
           <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between">
@@ -560,90 +528,6 @@ const MasterDataTab = ({ unit }) => {
         />
       </div>
 
-      {/* Video Management - Fixed */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center mb-4">
-          <SafeIcon icon={FiVideo} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Video</h3>
-        </div>
-
-        {isVideoUploading && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Video wird hochgeladen...</p>
-          </div>
-        )}
-
-        {unit.video && !isVideoUploading ? (
-          <div className="space-y-4">
-            <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <SafeIcon icon={FiVideo} className="h-8 w-8 text-purple-500 mr-3" />
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-white">{unit.video.name}</h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {(unit.video.size / 1024 / 1024).toFixed(2)} MB • Hochgeladen am {new Date(unit.video.uploadedAt).toLocaleDateString('de-DE')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={handleVideoDownload}
-                    className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900 rounded transition-colors"
-                    title="Herunterladen"
-                  >
-                    <SafeIcon icon={FiDownload} className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={handleVideoRemove}
-                    className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded transition-colors"
-                    title="Entfernen"
-                  >
-                    <SafeIcon icon={FiTrash2} className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-2">
-              <video
-                controls
-                className="w-full max-h-96 rounded"
-                src={unit.video.url}
-                onError={(e) => {
-                  console.error('Video playback error:', e);
-                }}
-              >
-                Ihr Browser unterstützt keine Videowiedergabe.
-              </video>
-            </div>
-          </div>
-        ) : !isVideoUploading ? (
-          <div className="text-center py-8">
-            <SafeIcon icon={FiVideo} className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-4">Kein Video hochgeladen</p>
-            <button
-              onClick={() => videoInputRef.current?.click()}
-              className="inline-flex items-center px-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-            >
-              <SafeIcon icon={FiUpload} className="h-4 w-4 mr-2" />
-              Video hochladen
-            </button>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Maximale Dateigröße: 500MB
-            </p>
-          </div>
-        ) : null}
-
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/*"
-          onChange={handleVideoUpload}
-          className="hidden"
-        />
-      </div>
-
       {/* Image Management */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
@@ -673,7 +557,6 @@ const MasterDataTab = ({ unit }) => {
             </button>
           </div>
         </div>
-
         {unit.images && unit.images.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {unit.images.map((image) => (
@@ -729,7 +612,6 @@ const MasterDataTab = ({ unit }) => {
             <p className="text-gray-500 dark:text-gray-400 mb-4">Keine Bilder hochgeladen</p>
           </div>
         )}
-
         <input
           id="imageUpload"
           type="file"
