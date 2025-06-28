@@ -4,10 +4,10 @@ import { v4 as uuidv4 } from 'uuid';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen } = FiIcons;
+const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen, FiCalendar, FiClock } = FiIcons;
 
 const MasterDataTab = ({ unit }) => {
-  const { updateLearningUnit, topics, getTopic, getTopicPath } = useLearningUnits();
+  const { updateLearningUnit, topics, getTopic, getTopicPath, currentUser } = useLearningUnits();
   const [newGoal, setNewGoal] = useState('');
   const [newUrl, setNewUrl] = useState({ title: '', url: '' });
   const [imageName, setImageName] = useState('');
@@ -26,7 +26,7 @@ const MasterDataTab = ({ unit }) => {
     handleUpdate({ [field]: value });
   };
 
-  // XML Export Function
+  // XML Export Function - Enhanced to include comments
   const handleXmlExport = () => {
     try {
       const xmlData = {
@@ -44,15 +44,17 @@ const MasterDataTab = ({ unit }) => {
           order: snippet.order,
           approved: snippet.approved || false
         })),
-        powerPointFileName: unit.powerPointFile?.name || null,
+        // Include all comments
+        comments: unit.comments || [],
+        explanationComments: unit.explanationComments || [],
+        speechTextComments: unit.speechTextComments || [],
+        targetDate: unit.targetDate || null,
         createdAt: unit.createdAt,
         updatedAt: unit.updatedAt
       };
 
-      // Create XML content
       const xmlContent = createXmlFromData(xmlData);
       
-      // Create and download file
       const blob = new Blob([xmlContent], { type: 'application/xml' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -70,7 +72,7 @@ const MasterDataTab = ({ unit }) => {
     }
   };
 
-  // XML Import Function
+  // XML Import Function - Enhanced to include comments
   const handleXmlImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -85,9 +87,8 @@ const MasterDataTab = ({ unit }) => {
       try {
         const xmlContent = e.target.result;
         const importedData = parseXmlToData(xmlContent);
-        
+
         if (window.confirm('Möchten Sie die aktuellen Daten wirklich durch die importierten Daten ersetzen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-          // Update learning unit with imported data
           const updatedUnit = {
             title: importedData.title || unit.title,
             description: importedData.description || '',
@@ -98,6 +99,10 @@ const MasterDataTab = ({ unit }) => {
             explanation: importedData.explanation || '',
             urls: importedData.urls || [],
             textSnippets: importedData.textSnippets || [],
+            comments: importedData.comments || [],
+            explanationComments: importedData.explanationComments || [],
+            speechTextComments: importedData.speechTextComments || [],
+            targetDate: importedData.targetDate || unit.targetDate,
             updatedAt: new Date().toISOString()
           };
 
@@ -110,12 +115,10 @@ const MasterDataTab = ({ unit }) => {
       }
     };
     reader.readAsText(file);
-    
-    // Reset file input
     event.target.value = '';
   };
 
-  // Helper function to create XML from data
+  // Helper function to create XML from data - Enhanced with comments
   const createXmlFromData = (data) => {
     const escapeXml = (str) => {
       if (!str) return '';
@@ -133,6 +136,9 @@ const MasterDataTab = ({ unit }) => {
     xml += `    <titel>${escapeXml(data.title)}</titel>\n`;
     xml += `    <beschreibung>${escapeXml(data.description)}</beschreibung>\n`;
     xml += `    <redaktioneller_stand>${escapeXml(data.editorialState)}</redaktioneller_stand>\n`;
+    if (data.targetDate) {
+      xml += `    <zieldatum>${escapeXml(data.targetDate)}</zieldatum>\n`;
+    }
     xml += `    <erstellt_am>${escapeXml(data.createdAt)}</erstellt_am>\n`;
     xml += `    <aktualisiert_am>${escapeXml(data.updatedAt)}</aktualisiert_am>\n`;
     xml += `  </grunddaten>\n`;
@@ -170,20 +176,29 @@ const MasterDataTab = ({ unit }) => {
     });
     xml += `  </text_snippets>\n`;
 
-    if (data.powerPointFileName) {
-      xml += `  <powerpoint_datei>${escapeXml(data.powerPointFileName)}</powerpoint_datei>\n`;
-    }
+    // Add comments section
+    xml += `  <kommentare>\n`;
+    [...(data.comments || []), ...(data.explanationComments || []), ...(data.speechTextComments || [])].forEach(comment => {
+      xml += `    <kommentar id="${escapeXml(comment.id)}">\n`;
+      xml += `      <inhalt>${escapeXml(comment.content)}</inhalt>\n`;
+      xml += `      <kontext>${escapeXml(comment.context || 'general')}</kontext>\n`;
+      xml += `      <autor_id>${escapeXml(comment.author?.id || 'unknown')}</autor_id>\n`;
+      xml += `      <autor_name>${escapeXml(comment.author?.name || 'Unbekannt')}</autor_name>\n`;
+      xml += `      <autor_avatar>${escapeXml(comment.author?.avatar || '')}</autor_avatar>\n`;
+      xml += `      <erstellt_am>${escapeXml(comment.createdAt)}</erstellt_am>\n`;
+      xml += `    </kommentar>\n`;
+    });
+    xml += `  </kommentare>\n`;
 
     xml += '</lerneinheit>';
     return xml;
   };
 
-  // Helper function to parse XML to data
+  // Helper function to parse XML to data - Enhanced with comments
   const parseXmlToData = (xmlContent) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
 
-    // Check for parsing errors
     const parseError = xmlDoc.querySelector('parsererror');
     if (parseError) {
       throw new Error('Ungültiges XML-Format');
@@ -201,9 +216,13 @@ const MasterDataTab = ({ unit }) => {
       notes: getTextContent('notizen'),
       speechText: getTextContent('sprechtext'),
       explanation: getTextContent('erklaerung'),
+      targetDate: getTextContent('grunddaten zieldatum') || null,
       learningGoals: [],
       urls: [],
-      textSnippets: []
+      textSnippets: [],
+      comments: [],
+      explanationComments: [],
+      speechTextComments: []
     };
 
     // Parse learning goals
@@ -245,6 +264,31 @@ const MasterDataTab = ({ unit }) => {
       data.textSnippets.push(snippet);
     });
 
+    // Parse comments
+    const comments = xmlDoc.querySelectorAll('kommentare kommentar');
+    comments.forEach(commentElement => {
+      const comment = {
+        id: commentElement.getAttribute('id') || uuidv4(),
+        content: commentElement.querySelector('inhalt')?.textContent || '',
+        context: commentElement.querySelector('kontext')?.textContent || 'general',
+        author: {
+          id: commentElement.querySelector('autor_id')?.textContent || 'unknown',
+          name: commentElement.querySelector('autor_name')?.textContent || 'Unbekannt',
+          avatar: commentElement.querySelector('autor_avatar')?.textContent || 'https://api.dicebear.com/7.x/avataaars/svg?seed=unknown'
+        },
+        createdAt: commentElement.querySelector('erstellt_am')?.textContent || new Date().toISOString()
+      };
+
+      // Distribute comments to appropriate arrays based on context
+      if (comment.context === 'explanation') {
+        data.explanationComments.push(comment);
+      } else if (comment.context === 'speechtext') {
+        data.speechTextComments.push(comment);
+      } else {
+        data.comments.push(comment);
+      }
+    });
+
     return data;
   };
 
@@ -263,7 +307,11 @@ const MasterDataTab = ({ unit }) => {
     if (!newGoal.trim()) return;
     const updatedGoals = [
       ...unit.learningGoals,
-      { id: uuidv4(), text: newGoal.trim(), createdAt: new Date().toISOString() }
+      {
+        id: uuidv4(),
+        text: newGoal.trim(),
+        createdAt: new Date().toISOString()
+      }
     ];
     handleUpdate({ learningGoals: updatedGoals });
     setNewGoal('');
@@ -279,7 +327,12 @@ const MasterDataTab = ({ unit }) => {
     if (!newUrl.title.trim() || !newUrl.url.trim()) return;
     const updatedUrls = [
       ...(unit.urls || []),
-      { id: uuidv4(), title: newUrl.title.trim(), url: newUrl.url.trim(), createdAt: new Date().toISOString() }
+      {
+        id: uuidv4(),
+        title: newUrl.title.trim(),
+        url: newUrl.url.trim(),
+        createdAt: new Date().toISOString()
+      }
     ];
     handleUpdate({ urls: updatedUrls });
     setNewUrl({ title: '', url: '' });
@@ -303,6 +356,16 @@ const MasterDataTab = ({ unit }) => {
       [EDITORIAL_STATES.PUBLISHED]: 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900'
     };
     return colors[state] || 'text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700';
+  };
+
+  // Check if target date is overdue
+  const isTargetDateOverdue = () => {
+    if (!unit.targetDate) return false;
+    const targetDate = new Date(unit.targetDate);
+    const today = new Date();
+    const isOverdue = targetDate < today;
+    const isNotReady = unit.editorialState !== EDITORIAL_STATES.READY && unit.editorialState !== EDITORIAL_STATES.PUBLISHED;
+    return isOverdue && isNotReady;
   };
 
   // PowerPoint File Management
@@ -391,8 +454,10 @@ const MasterDataTab = ({ unit }) => {
         url: pendingImageData.url,
         uploadedAt: new Date().toISOString()
       };
+
       const updatedImages = [...(unit.images || []), newImage];
       handleUpdate({ images: updatedImages });
+
       setShowImageNameDialog(false);
       setPendingImageData(null);
       setImageName('');
@@ -484,7 +549,7 @@ const MasterDataTab = ({ unit }) => {
           </div>
         </div>
         <p className="text-sm text-blue-800 dark:text-blue-200">
-          <strong>Export:</strong> Lädt alle Texte, URLs und Snippets als XML-Datei herunter (ohne Bilder, Videos oder Kommentare).
+          <strong>Export:</strong> Lädt alle Texte, URLs, Snippets und Kommentare als XML-Datei herunter (ohne Bilder, Videos oder PowerPoint-Dateien).
           <br />
           <strong>Import:</strong> Ersetzt die aktuellen Daten durch die Inhalte einer XML-Datei.
         </p>
@@ -603,6 +668,33 @@ const MasterDataTab = ({ unit }) => {
               placeholder="Beschreiben Sie den Inhalt der Lerneinheit..."
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Zieldatum für Fertigstellung
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="date"
+                value={unit.targetDate || ''}
+                onChange={(e) => handleBasicInfoChange('targetDate', e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              {unit.targetDate && (
+                <div className="flex items-center">
+                  <SafeIcon 
+                    icon={isTargetDateOverdue() ? FiClock : FiCalendar} 
+                    className={`h-4 w-4 mr-1 ${isTargetDateOverdue() ? 'text-red-500' : 'text-green-500'}`} 
+                  />
+                  <span className={`text-xs ${isTargetDateOverdue() ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {isTargetDateOverdue() ? 'Überfällig' : 'Zieldatum gesetzt'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Das Zieldatum wird rot angezeigt, wenn die Lerneinheit bis dahin nicht fertiggestellt ist.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -701,6 +793,7 @@ const MasterDataTab = ({ unit }) => {
             URL hinzufügen
           </button>
         </div>
+
         {unit.urls && unit.urls.length > 0 ? (
           <div className="space-y-3">
             {unit.urls.map((url) => (
@@ -743,6 +836,7 @@ const MasterDataTab = ({ unit }) => {
           <SafeIcon icon={FiFile} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">PowerPoint-Datei</h3>
         </div>
+
         {unit.powerPointFile ? (
           <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between">
@@ -831,6 +925,7 @@ const MasterDataTab = ({ unit }) => {
             </button>
           </div>
         </div>
+
         {unit.images && unit.images.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {unit.images.map((image) => (

@@ -5,17 +5,15 @@ import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTarget, FiFileText, FiSettings } = FiIcons;
+const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTarget, FiFileText } = FiIcons;
 
 const TrainingModuleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { 
     getTrainingModule, 
-    updateTrainingModule,
-    trainings,
     getTopicsByTrainingModule, 
-    deleteTrainingModule,
+    deleteTrainingModule, 
     deleteTopic, 
     getTraining, 
     getSubject, 
@@ -65,10 +63,6 @@ const TrainingModuleDetail = () => {
     }
   };
 
-  const handleTrainingChange = (newTrainingId) => {
-    updateTrainingModule(trainingModule.id, { trainingId: newTrainingId || null });
-  };
-
   return (
     <div className="space-y-6">
       <div className="mb-6">
@@ -107,31 +101,6 @@ const TrainingModuleDetail = () => {
               Löschen
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Training Assignment */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center mb-4">
-          <SafeIcon icon={FiSettings} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Training-Zuordnung</h3>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Training auswählen
-          </label>
-          <select
-            value={trainingModule.trainingId || ''}
-            onChange={(e) => handleTrainingChange(e.target.value || null)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="">Kein Training ausgewählt</option>
-            {trainings.map((training) => (
-              <option key={training.id} value={training.id}>
-                {training.title}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 

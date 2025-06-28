@@ -10,7 +10,14 @@ const { FiSave, FiArrowLeft, FiTarget } = FiIcons;
 const EditTopic = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getTopic, updateTopic, trainingModules } = useLearningUnits();
+  const { 
+    getTopic, 
+    updateTopic, 
+    trainingModules, 
+    getTrainingModule, 
+    getTraining, 
+    getSubject 
+  } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -42,6 +49,21 @@ const EditTopic = () => {
       </div>
     );
   }
+
+  const getModulePath = (moduleId) => {
+    const module = getTrainingModule(moduleId);
+    if (!module) return '';
+    
+    const training = module.trainingId ? getTraining(module.trainingId) : null;
+    const subject = training?.subjectId ? getSubject(training.subjectId) : null;
+    
+    const parts = [];
+    if (subject) parts.push(subject.title);
+    if (training) parts.push(training.title);
+    parts.push(module.title);
+    
+    return parts.join(' → ');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -91,7 +113,7 @@ const EditTopic = () => {
               <option value="">Kein Trainingsmodul ausgewählt</option>
               {trainingModules.map((module) => (
                 <option key={module.id} value={module.id}>
-                  {module.title}
+                  {getModulePath(module.id)}
                 </option>
               ))}
             </select>

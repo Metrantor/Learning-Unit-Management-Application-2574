@@ -5,7 +5,7 @@ import { useLearningUnits, EDITORIAL_STATES } from '../context/LearningUnitConte
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiFilter, FiFileText, FiBook, FiPackage, FiFolder, FiTarget } = FiIcons;
+const { FiFilter, FiFileText, FiBook, FiPackage, FiFolder, FiTarget, FiCalendar, FiClock } = FiIcons;
 
 const ITEM_TYPE = 'LEARNING_UNIT';
 
@@ -18,6 +18,15 @@ const KanbanCard = ({ unit, onClick }) => {
     }),
   });
 
+  const isTargetDateOverdue = () => {
+    if (!unit.targetDate) return false;
+    const targetDate = new Date(unit.targetDate);
+    const today = new Date();
+    const isOverdue = targetDate < today;
+    const isNotReady = unit.editorialState !== EDITORIAL_STATES.READY && unit.editorialState !== EDITORIAL_STATES.PUBLISHED;
+    return isOverdue && isNotReady;
+  };
+
   return (
     <div
       ref={drag}
@@ -29,14 +38,14 @@ const KanbanCard = ({ unit, onClick }) => {
       <h4 className="font-medium text-gray-900 dark:text-white text-sm mb-2 line-clamp-2">
         {unit.title}
       </h4>
-      
+
       {unit.description && (
         <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
           {unit.description}
         </p>
       )}
-      
-      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+
+      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
         <div className="flex items-center">
           <SafeIcon icon={FiTarget} className="h-3 w-3 mr-1" />
           {unit.learningGoals?.length || 0}
@@ -45,7 +54,20 @@ const KanbanCard = ({ unit, onClick }) => {
           {new Date(unit.updatedAt).toLocaleDateString('de-DE')}
         </div>
       </div>
-      
+
+      {unit.targetDate && (
+        <div className="flex items-center text-xs mb-2">
+          <SafeIcon 
+            icon={isTargetDateOverdue() ? FiClock : FiCalendar} 
+            className={`h-3 w-3 mr-1 ${isTargetDateOverdue() ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`} 
+          />
+          <span className={isTargetDateOverdue() ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'}>
+            {new Date(unit.targetDate).toLocaleDateString('de-DE')}
+            {isTargetDateOverdue() && ' (überfällig)'}
+          </span>
+        </div>
+      )}
+
       {unit.textSnippets?.length > 0 && (
         <div className="mt-2 flex items-center text-xs text-blue-600 dark:text-blue-400">
           <SafeIcon icon={FiFileText} className="h-3 w-3 mr-1" />
@@ -80,7 +102,7 @@ const KanbanColumn = ({ title, state, units, onDrop, onCardClick }) => {
     <div
       ref={drop}
       className={`flex-1 min-h-96 p-4 rounded-lg border-2 transition-colors ${
-        isOver ? 'border-primary-400 bg-primary-50' : getStateColor(state)
+        isOver ? 'border-primary-400 bg-primary-50 dark:bg-primary-900' : getStateColor(state)
       }`}
     >
       <div className="flex items-center justify-between mb-4">
@@ -89,14 +111,10 @@ const KanbanColumn = ({ title, state, units, onDrop, onCardClick }) => {
           {units.length}
         </span>
       </div>
-      
+
       <div className="space-y-3">
         {units.map((unit) => (
-          <KanbanCard
-            key={unit.id}
-            unit={unit}
-            onClick={onCardClick}
-          />
+          <KanbanCard key={unit.id} unit={unit} onClick={onCardClick} />
         ))}
       </div>
     </div>
@@ -110,23 +128,20 @@ const KanbanBoard = () => {
     subjects, 
     trainings, 
     trainingModules, 
-    topics,
-    getTopic,
-    getTrainingModule,
-    getTraining,
-    getSubject
+    topics, 
+    getTopic, 
+    getTrainingModule, 
+    getTraining, 
+    getSubject 
   } = useLearningUnits();
-  
-  const [filter, setFilter] = useState({
-    type: 'all',
-    id: null
-  });
+
+  const [filter, setFilter] = useState({ type: 'all', id: null });
 
   const filteredUnits = useMemo(() => {
     if (filter.type === 'all') {
       return learningUnits;
     }
-    
+
     switch (filter.type) {
       case 'subject':
         const subjectTrainings = trainings.filter(t => t.subjectId === filter.id);
@@ -139,7 +154,7 @@ const KanbanBoard = () => {
         return learningUnits.filter(unit => 
           subjectTopics.some(topic => topic.id === unit.topicId)
         );
-      
+
       case 'training':
         const trainingModulesFiltered = trainingModules.filter(m => m.trainingId === filter.id);
         const trainingTopics = topics.filter(topic => 
@@ -148,16 +163,16 @@ const KanbanBoard = () => {
         return learningUnits.filter(unit => 
           trainingTopics.some(topic => topic.id === unit.topicId)
         );
-      
+
       case 'module':
         const moduleTopics = topics.filter(topic => topic.trainingModuleId === filter.id);
         return learningUnits.filter(unit => 
           moduleTopics.some(topic => topic.id === unit.topicId)
         );
-      
+
       case 'topic':
         return learningUnits.filter(unit => unit.topicId === filter.id);
-      
+
       default:
         return learningUnits;
     }
@@ -181,7 +196,7 @@ const KanbanBoard = () => {
 
   const getFilterLabel = () => {
     if (filter.type === 'all') return 'Alle Lerneinheiten';
-    
+
     switch (filter.type) {
       case 'subject':
         const subject = getSubject(filter.id);
@@ -205,14 +220,13 @@ const KanbanBoard = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Kanban Board</h2>
-          
+
           {/* Filter Dropdown */}
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <SafeIcon icon={FiFilter} className="h-4 w-4 text-gray-500 dark:text-gray-400" />
               <span className="text-sm text-gray-700 dark:text-gray-300">Filter: {getFilterLabel()}</span>
             </div>
-            
             <select
               value={`${filter.type}:${filter.id || ''}`}
               onChange={(e) => {
@@ -222,7 +236,6 @@ const KanbanBoard = () => {
               className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             >
               <option value="all:">Alle Lerneinheiten</option>
-              
               <optgroup label="Fachthemen">
                 {subjects.map(subject => (
                   <option key={subject.id} value={`subject:${subject.id}`}>
@@ -230,7 +243,6 @@ const KanbanBoard = () => {
                   </option>
                 ))}
               </optgroup>
-              
               <optgroup label="Trainings">
                 {trainings.map(training => (
                   <option key={training.id} value={`training:${training.id}`}>
@@ -238,7 +250,6 @@ const KanbanBoard = () => {
                   </option>
                 ))}
               </optgroup>
-              
               <optgroup label="Module">
                 {trainingModules.map(module => (
                   <option key={module.id} value={`module:${module.id}`}>
@@ -246,7 +257,6 @@ const KanbanBoard = () => {
                   </option>
                 ))}
               </optgroup>
-              
               <optgroup label="Themen">
                 {topics.map(topic => (
                   <option key={topic.id} value={`topic:${topic.id}`}>
@@ -284,7 +294,8 @@ const KanbanBoard = () => {
             <p className="text-gray-600 dark:text-gray-400">
               {filter.type === 'all' 
                 ? 'Erstellen Sie Ihre erste Lerneinheit.' 
-                : 'Keine Lerneinheiten für den ausgewählten Filter gefunden.'}
+                : 'Keine Lerneinheiten für den ausgewählten Filter gefunden.'
+              }
             </p>
           </div>
         )}

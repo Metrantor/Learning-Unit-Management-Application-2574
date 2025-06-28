@@ -10,7 +10,13 @@ const { FiSave, FiArrowLeft, FiLayers } = FiIcons;
 const EditTrainingModule = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getTrainingModule, updateTrainingModule, trainings } = useLearningUnits();
+  const { 
+    getTrainingModule, 
+    updateTrainingModule, 
+    trainings, 
+    getTraining, 
+    getSubject 
+  } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -42,6 +48,18 @@ const EditTrainingModule = () => {
       </div>
     );
   }
+
+  const getTrainingPath = (trainingId) => {
+    const training = getTraining(trainingId);
+    if (!training) return '';
+    
+    const subject = training.subjectId ? getSubject(training.subjectId) : null;
+    
+    if (subject) {
+      return `${subject.title} → ${training.title}`;
+    }
+    return training.title;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -91,7 +109,7 @@ const EditTrainingModule = () => {
               <option value="">Kein Training ausgewählt</option>
               {trainings.map((training) => (
                 <option key={training.id} value={training.id}>
-                  {training.title}
+                  {getTrainingPath(training.id)}
                 </option>
               ))}
             </select>

@@ -5,17 +5,15 @@ import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage, FiSettings } = FiIcons;
+const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage } = FiIcons;
 
 const TrainingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { 
     getTraining, 
-    updateTraining,
-    subjects,
     getTrainingModulesByTraining, 
-    deleteTraining,
+    deleteTraining, 
     deleteTrainingModule, 
     getTrainingModuleStats, 
     getSubject 
@@ -63,10 +61,6 @@ const TrainingDetail = () => {
     }
   };
 
-  const handleSubjectChange = (newSubjectId) => {
-    updateTraining(training.id, { subjectId: newSubjectId || null });
-  };
-
   return (
     <div className="space-y-6">
       <div className="mb-6">
@@ -105,31 +99,6 @@ const TrainingDetail = () => {
               Löschen
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Subject Assignment */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center mb-4">
-          <SafeIcon icon={FiSettings} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Fachthema-Zuordnung</h3>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Fachthema auswählen
-          </label>
-          <select
-            value={training.subjectId || ''}
-            onChange={(e) => handleSubjectChange(e.target.value || null)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="">Kein Fachthema ausgewählt</option>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>
-                {subject.title}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 

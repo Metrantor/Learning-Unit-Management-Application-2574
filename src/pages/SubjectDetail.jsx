@@ -5,7 +5,7 @@ import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage, FiSettings } = FiIcons;
+const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage } = FiIcons;
 
 const SubjectDetail = () => {
   const { id } = useParams();

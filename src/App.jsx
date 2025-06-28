@@ -5,6 +5,7 @@ import { IdeasProvider } from './context/IdeasContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
+import DiaflowWrapper from './components/DiaflowWrapper';
 import Layout from './components/Layout';
 import LoginForm from './components/auth/LoginForm';
 import AdminPanel from './components/admin/AdminPanel';
@@ -45,44 +46,46 @@ const AppContent = () => {
   }
 
   return (
-    <LearningUnitProvider>
-      <IdeasProvider>
-        <Router>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/admin" element={<AdminPanel />} />
-              <Route path="/kanban" element={<KanbanBoard />} />
-              <Route path="/ideas" element={<IdeasKanban />} />
-              
-              {/* Subjects */}
-              <Route path="/subjects/create" element={<CreateSubject />} />
-              <Route path="/subjects/:id" element={<SubjectDetail />} />
-              <Route path="/subjects/:id/edit" element={<EditSubject />} />
-              
-              {/* Trainings */}
-              <Route path="/trainings/create" element={<CreateTraining />} />
-              <Route path="/trainings/:id" element={<TrainingDetail />} />
-              <Route path="/trainings/:id/edit" element={<EditTraining />} />
-              
-              {/* Training Modules */}
-              <Route path="/training-modules/create" element={<CreateTrainingModule />} />
-              <Route path="/training-modules/:id" element={<TrainingModuleDetail />} />
-              <Route path="/training-modules/:id/edit" element={<EditTrainingModule />} />
-              
-              {/* Topics */}
-              <Route path="/topics/create" element={<CreateTopic />} />
-              <Route path="/topics/:id" element={<TopicDetail />} />
-              <Route path="/topics/:id/edit" element={<EditTopic />} />
-              
-              {/* Learning Units */}
-              <Route path="/create" element={<CreateLearningUnit />} />
-              <Route path="/unit/:id" element={<LearningUnitDetail />} />
-            </Routes>
-          </Layout>
-        </Router>
-      </IdeasProvider>
-    </LearningUnitProvider>
+    <DiaflowWrapper>
+      <LearningUnitProvider>
+        <IdeasProvider>
+          <Router>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/admin" element={<AdminPanel />} />
+                <Route path="/kanban" element={<KanbanBoard />} />
+                <Route path="/ideas" element={<IdeasKanban />} />
+
+                {/* Subjects */}
+                <Route path="/subjects/create" element={<CreateSubject />} />
+                <Route path="/subjects/:id" element={<SubjectDetail />} />
+                <Route path="/subjects/:id/edit" element={<EditSubject />} />
+
+                {/* Trainings */}
+                <Route path="/trainings/create" element={<CreateTraining />} />
+                <Route path="/trainings/:id" element={<TrainingDetail />} />
+                <Route path="/trainings/:id/edit" element={<EditTraining />} />
+
+                {/* Training Modules */}
+                <Route path="/training-modules/create" element={<CreateTrainingModule />} />
+                <Route path="/training-modules/:id" element={<TrainingModuleDetail />} />
+                <Route path="/training-modules/:id/edit" element={<EditTrainingModule />} />
+
+                {/* Topics */}
+                <Route path="/topics/create" element={<CreateTopic />} />
+                <Route path="/topics/:id" element={<TopicDetail />} />
+                <Route path="/topics/:id/edit" element={<EditTopic />} />
+
+                {/* Learning Units */}
+                <Route path="/create" element={<CreateLearningUnit />} />
+                <Route path="/unit/:id" element={<LearningUnitDetail />} />
+              </Routes>
+            </Layout>
+          </Router>
+        </IdeasProvider>
+      </LearningUnitProvider>
+    </DiaflowWrapper>
   );
 };
 
