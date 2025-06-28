@@ -9,8 +9,8 @@ const { FiMail, FiKey, FiLogIn } = FiIcons;
 const LoginForm = () => {
   const { loginWithInvitationCode } = useAuth();
   const [formData, setFormData] = useState({
-    email: '',
-    invitationCode: ''
+    email: 'admin@example.com', // Pre-filled for convenience
+    invitationCode: 'ADMIN2024'   // Pre-filled for convenience
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,6 +24,7 @@ const LoginForm = () => {
       await loginWithInvitationCode(formData.email, formData.invitationCode);
     } catch (err) {
       setError(err.message);
+      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -38,7 +39,7 @@ const LoginForm = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full space-y-8"
@@ -54,7 +55,7 @@ const LoginForm = () => {
             Verwenden Sie Ihren Einladungscode, um sich anzumelden
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
@@ -77,7 +78,7 @@ const LoginForm = () => {
                 />
               </div>
             </div>
-            
+
             <div>
               <label htmlFor="invitationCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Einladungscode
@@ -116,14 +117,20 @@ const LoginForm = () => {
             </button>
           </div>
         </form>
-        
+
         <div className="text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Sie haben noch keinen Einladungscode? Wenden Sie sich an Ihren Administrator.
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            <strong>Demo:</strong> Verwenden Sie admin@example.com mit Code ADMIN2024
-          </p>
+          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+              🔑 Admin-Zugang (bereits ausgefüllt):
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              <strong>E-Mail:</strong> admin@example.com<br />
+              <strong>Code:</strong> ADMIN2024
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>

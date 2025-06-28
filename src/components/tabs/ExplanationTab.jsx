@@ -1,18 +1,156 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLearningUnits } from '../../context/LearningUnitContext';
+import { v4 as uuidv4 } from 'uuid';
 import MDEditor from '@uiw/react-md-editor';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiTarget } = FiIcons;
+const { FiTarget, FiImage, FiUpload, FiClipboard, FiTrash2, FiEye, FiCopy } = FiIcons;
 
 const ExplanationTab = ({ unit }) => {
-  const { updateLearningUnit } = useLearningUnits();
+  const { updateLearningUnit, getTopic } = useLearningUnits();
   const [explanation, setExplanation] = useState(unit.explanation || '');
+  const [imageName, setImageName] = useState('');
+  const [showImageNameDialog, setShowImageNameDialog] = useState(false);
+  const [pendingImageData, setPendingImageData] = useState(null);
 
   const handleChange = (value) => {
     setExplanation(value || '');
     updateLearningUnit(unit.id, { explanation: value || '' });
+  };
+
+  // Helper function to generate smart filename for explanation images
+  const generateSmartFilename = (originalName = '') => {
+    const topic = unit.topicId ? getTopic(unit.topicId) : null;
+    const topicName = topic?.title || '';
+    const unitName = unit.title || '';
+    
+    // Create abbreviated versions
+    const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+    const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
+    
+    // Use original name if provided, otherwise generate generic name
+    const baseName = originalName.replace(/\.[^/.]+$/, "") || `Erklaerung_${Date.now()}`;
+    
+    if (topicAbbr && unitAbbr) {
+      return `${topicAbbr}_${unitAbbr}_${baseName}`;
+    } else if (unitAbbr) {
+      return `${unitAbbr}_${baseName}`;
+    } else {
+      return baseName;
+    }
+  };
+
+  // Image Management for Explanation
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const imageData = {
+            file,
+            url: event.target.result
+          };
+          setPendingImageData(imageData);
+          setImageName(generateSmartFilename(file.name));
+          setShowImageNameDialog(true);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert('Bitte wählen Sie nur Bilddateien aus.');
+      }
+    });
+  };
+
+  const confirmImageUpload = () => {
+    if (pendingImageData && imageName.trim()) {
+      const newImage = {
+        id: uuidv4(),
+        name: imageName.trim(),
+        size: pendingImageData.file.size,
+        type: pendingImageData.file.type,
+        url: pendingImageData.url,
+        uploadedAt: new Date().toISOString(),
+        context: 'explanation' // Mark as explanation image
+      };
+
+      const updatedImages = [...(unit.images || []), newImage];
+      updateLearningUnit(unit.id, { images: updatedImages });
+
+      setShowImageNameDialog(false);
+      setPendingImageData(null);
+      setImageName('');
+    }
+  };
+
+  const handleClipboardPaste = async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const clipboardItem of clipboardItems) {
+        for (const type of clipboardItem.types) {
+          if (type.startsWith('image/')) {
+            const blob = await clipboardItem.getType(type);
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              setPendingImageData({
+                file: blob,
+                url: event.target.result
+              });
+              setImageName(generateSmartFilename(`Erklaerung_Zwischenablage_${new Date().toISOString().slice(0, 10)}`));
+              setShowImageNameDialog(true);
+            };
+            reader.readAsDataURL(blob);
+            return;
+          }
+        }
+      }
+      alert('Kein Bild in der Zwischenablage gefunden.');
+    } catch (error) {
+      console.error('Fehler beim Zugriff auf die Zwischenablage:', error);
+      alert('Fehler beim Zugriff auf die Zwischenablage.');
+    }
+  };
+
+  const handleImageRemove = (imageId) => {
+    if (window.confirm('Möchten Sie dieses Bild wirklich entfernen?')) {
+      const updatedImages = unit.images.filter(img => img.id !== imageId);
+      updateLearningUnit(unit.id, { images: updatedImages });
+    }
+  };
+
+  const handleImageCopy = async (imageUrl) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob })
+      ]);
+      alert('Bild in Zwischenablage kopiert.');
+    } catch (error) {
+      console.error('Fehler beim Kopieren:', error);
+      alert('Fehler beim Kopieren des Bildes.');
+    }
+  };
+
+  const handleImageOpen = (imageUrl, imageName) => {
+    const newWindow = window.open();
+    newWindow.document.write(`
+      <html>
+        <head><title>${imageName}</title></head>
+        <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f3f4f6;">
+          <img src="${imageUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="${imageName}" />
+        </body>
+      </html>
+    `);
+  };
+
+  // Insert image markdown into editor
+  const insertImageIntoEditor = (image) => {
+    const imageMarkdown = `![${image.name}](${image.url})`;
+    const newValue = explanation + '\n\n' + imageMarkdown;
+    setExplanation(newValue);
+    updateLearningUnit(unit.id, { explanation: newValue });
   };
 
   return (
@@ -23,7 +161,6 @@ const ExplanationTab = ({ unit }) => {
           <SafeIcon icon={FiTarget} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Lernziele (Übersicht)</h3>
         </div>
-        
         {unit.learningGoals && unit.learningGoals.length > 0 ? (
           <div className="space-y-2">
             {unit.learningGoals.map((goal, index) => (
@@ -36,8 +173,114 @@ const ExplanationTab = ({ unit }) => {
             ))}
           </div>
         ) : (
-          <p className="text-gray-500 dark:text-gray-400 italic">Keine Lernziele definiert. Diese können im Tab "Stammdaten" hinzugefügt werden.</p>
+          <p className="text-gray-500 dark:text-gray-400 italic">
+            Keine Lernziele definiert. Diese können im Tab "Stammdaten" hinzugefügt werden.
+          </p>
         )}
+      </div>
+
+      {/* Image Management for Explanation */}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <SafeIcon icon={FiImage} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Bilder für Erklärung</h3>
+            {unit.images && unit.images.length > 0 && (
+              <span className="ml-2 px-2 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 text-xs rounded-full">
+                {unit.images.length}
+              </span>
+            )}
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleClipboardPaste}
+              className="inline-flex items-center px-3 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm"
+            >
+              <SafeIcon icon={FiClipboard} className="h-4 w-4 mr-2" />
+              Aus Zwischenablage
+            </button>
+            <button
+              onClick={() => document.getElementById('explanationImageUpload').click()}
+              className="inline-flex items-center px-3 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors text-sm"
+            >
+              <SafeIcon icon={FiUpload} className="h-4 w-4 mr-2" />
+              Bilder hochladen
+            </button>
+          </div>
+        </div>
+
+        {unit.images && unit.images.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {unit.images.map((image) => (
+              <div key={image.id} className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-700">
+                <div className="aspect-video bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                  <img
+                    src={image.url}
+                    alt={image.name}
+                    className="max-w-full max-h-full object-contain cursor-pointer"
+                    onClick={() => insertImageIntoEditor(image)}
+                    title="Klicken, um in Erklärung einzufügen"
+                  />
+                </div>
+                <div className="p-3">
+                  <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate" title={image.name}>
+                    {image.name}
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    {(image.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                  <div className="flex justify-between">
+                    <button
+                      onClick={() => insertImageIntoEditor(image)}
+                      className="p-1 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900 rounded transition-colors"
+                      title="In Erklärung einfügen"
+                    >
+                      <SafeIcon icon={FiTarget} className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleImageOpen(image.url, image.name)}
+                      className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors"
+                      title="Öffnen"
+                    >
+                      <SafeIcon icon={FiEye} className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleImageCopy(image.url)}
+                      className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900 rounded transition-colors"
+                      title="In Zwischenablage kopieren"
+                    >
+                      <SafeIcon icon={FiCopy} className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleImageRemove(image.id)}
+                      className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded transition-colors"
+                      title="Löschen"
+                    >
+                      <SafeIcon icon={FiTrash2} className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <SafeIcon icon={FiImage} className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400 mb-4">Keine Bilder hochgeladen</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Hochgeladene Bilder können durch Anklicken direkt in die Erklärung eingefügt werden.
+            </p>
+          </div>
+        )}
+
+        <input
+          id="explanationImageUpload"
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleImageUpload}
+          className="hidden"
+        />
       </div>
 
       {/* Markdown Editor */}
@@ -45,11 +288,12 @@ const ExplanationTab = ({ unit }) => {
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Schriftliche Erklärung</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Verfassen Sie hier die schriftliche Erklärung der Lerninhalte zur späteren Veröffentlichung. 
-            Sie können Markdown-Formatierung verwenden.
+            Verfassen Sie hier die schriftliche Erklärung der Lerninhalte zur späteren Veröffentlichung. Sie können Markdown-Formatierung verwenden.
+          </p>
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+            💡 Tipp: Klicken Sie auf ein Bild oben, um es direkt in die Erklärung einzufügen.
           </p>
         </div>
-        
         <div className="p-4">
           <MDEditor
             value={explanation}
@@ -59,8 +303,12 @@ const ExplanationTab = ({ unit }) => {
             visibleDragBar={false}
             data-color-mode="auto"
             textareaProps={{
-              placeholder: 'Schreiben Sie hier Ihre schriftliche Erklärung...\n\n**Sie können Markdown verwenden:**\n- **Fett** oder *kursiv*\n- [Links](http://example.com)\n- Listen und mehr',
-              style: { fontSize: 14, lineHeight: 1.5, minHeight: 400 }
+              placeholder: 'Schreiben Sie hier Ihre schriftliche Erklärung...\n\n**Sie können Markdown verwenden:**\n- **Fett** oder *kursiv*\n- [Links](http://example.com)\n- ![Bilder](url)\n- Listen und mehr',
+              style: {
+                fontSize: 14,
+                lineHeight: 1.5,
+                minHeight: 400
+              }
             }}
           />
         </div>
@@ -72,6 +320,50 @@ const ExplanationTab = ({ unit }) => {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Vorschau</h3>
           <div className="prose dark:prose-invert max-w-none">
             <MDEditor.Markdown source={explanation} />
+          </div>
+        </div>
+      )}
+
+      {/* Image Name Dialog */}
+      {showImageNameDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Bildname festlegen</h3>
+            {pendingImageData && (
+              <div className="mb-4">
+                <img
+                  src={pendingImageData.url}
+                  alt="Vorschau"
+                  className="w-full h-32 object-cover rounded border"
+                />
+              </div>
+            )}
+            <input
+              type="text"
+              value={imageName}
+              onChange={(e) => setImageName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 mb-4 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder="Bildname eingeben..."
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowImageNameDialog(false);
+                  setPendingImageData(null);
+                  setImageName('');
+                }}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={confirmImageUpload}
+                disabled={!imageName.trim()}
+                className="px-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Speichern
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -7,7 +7,7 @@ import * as FiIcons from 'react-icons/fi';
 const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiVideo, FiPlay } = FiIcons;
 
 const MasterDataTab = ({ unit }) => {
-  const { updateLearningUnit, topics } = useLearningUnits();
+  const { updateLearningUnit, topics, getTopic } = useLearningUnits();
   const [newGoal, setNewGoal] = useState('');
   const [newUrl, setNewUrl] = useState({ title: '', url: '' });
   const [imageName, setImageName] = useState('');
@@ -31,7 +31,11 @@ const MasterDataTab = ({ unit }) => {
     if (!newGoal.trim()) return;
     const updatedGoals = [
       ...unit.learningGoals,
-      { id: uuidv4(), text: newGoal.trim(), createdAt: new Date().toISOString() }
+      {
+        id: uuidv4(),
+        text: newGoal.trim(),
+        createdAt: new Date().toISOString()
+      }
     ];
     handleUpdate({ learningGoals: updatedGoals });
     setNewGoal('');
@@ -47,7 +51,12 @@ const MasterDataTab = ({ unit }) => {
     if (!newUrl.title.trim() || !newUrl.url.trim()) return;
     const updatedUrls = [
       ...(unit.urls || []),
-      { id: uuidv4(), title: newUrl.title.trim(), url: newUrl.url.trim(), createdAt: new Date().toISOString() }
+      {
+        id: uuidv4(),
+        title: newUrl.title.trim(),
+        url: newUrl.url.trim(),
+        createdAt: new Date().toISOString()
+      }
     ];
     handleUpdate({ urls: updatedUrls });
     setNewUrl({ title: '', url: '' });
@@ -106,45 +115,30 @@ const MasterDataTab = ({ unit }) => {
       return;
     }
 
-    // Check file size (limit to 100MB for browser performance)
-    const maxSize = 100 * 1024 * 1024; // 100MB
+    // Check file size (limit to 500MB for better compatibility)
+    const maxSize = 500 * 1024 * 1024; // 500MB
     if (file.size > maxSize) {
-      alert('Die Videodatei ist zu groß. Maximale Größe: 100MB');
+      alert('Die Videodatei ist zu groß. Maximale Größe: 500MB');
       return;
     }
 
     setIsVideoUploading(true);
 
     try {
-      const reader = new FileReader();
+      // Create object URL instead of reading as data URL for better performance
+      const videoUrl = URL.createObjectURL(file);
       
-      reader.onload = (event) => {
-        try {
-          const videoData = {
-            id: uuidv4(),
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            url: event.target.result,
-            uploadedAt: new Date().toISOString()
-          };
-          
-          handleUpdate({ video: videoData });
-          setIsVideoUploading(false);
-        } catch (error) {
-          console.error('Error processing video:', error);
-          alert('Fehler beim Verarbeiten der Videodatei.');
-          setIsVideoUploading(false);
-        }
+      const videoData = {
+        id: uuidv4(),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: videoUrl,
+        uploadedAt: new Date().toISOString()
       };
 
-      reader.onerror = () => {
-        console.error('Error reading file');
-        alert('Fehler beim Lesen der Videodatei.');
-        setIsVideoUploading(false);
-      };
-
-      reader.readAsDataURL(file);
+      handleUpdate({ video: videoData });
+      setIsVideoUploading(false);
     } catch (error) {
       console.error('Error uploading video:', error);
       alert('Fehler beim Upload der Videodatei.');
@@ -159,6 +153,10 @@ const MasterDataTab = ({ unit }) => {
 
   const handleVideoRemove = () => {
     if (window.confirm('Möchten Sie das Video wirklich entfernen?')) {
+      // Revoke object URL to free memory
+      if (unit.video && unit.video.url) {
+        URL.revokeObjectURL(unit.video.url);
+      }
       handleUpdate({ video: null });
     }
   };
@@ -179,7 +177,29 @@ const MasterDataTab = ({ unit }) => {
     }
   };
 
-  // Image Management - Fixed for proper display
+  // Helper function to generate smart filename
+  const generateSmartFilename = (originalName = '') => {
+    const topic = unit.topicId ? getTopic(unit.topicId) : null;
+    const topicName = topic?.title || '';
+    const unitName = unit.title || '';
+    
+    // Create abbreviated versions
+    const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+    const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
+    
+    // Use original name if provided, otherwise generate generic name
+    const baseName = originalName.replace(/\.[^/.]+$/, "") || `Bild_${Date.now()}`;
+    
+    if (topicAbbr && unitAbbr) {
+      return `${topicAbbr}_${unitAbbr}_${baseName}`;
+    } else if (unitAbbr) {
+      return `${unitAbbr}_${baseName}`;
+    } else {
+      return baseName;
+    }
+  };
+
+  // Image Management - Enhanced with smart naming
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -188,10 +208,10 @@ const MasterDataTab = ({ unit }) => {
         reader.onload = (event) => {
           const imageData = {
             file,
-            url: event.target.result // Use FileReader result for proper display
+            url: event.target.result
           };
           setPendingImageData(imageData);
-          setImageName(file.name.replace(/\.[^/.]+$/, ""));
+          setImageName(generateSmartFilename(file.name));
           setShowImageNameDialog(true);
         };
         reader.readAsDataURL(file);
@@ -208,11 +228,13 @@ const MasterDataTab = ({ unit }) => {
         name: imageName.trim(),
         size: pendingImageData.file.size,
         type: pendingImageData.file.type,
-        url: pendingImageData.url, // This now contains the proper base64 data URL
+        url: pendingImageData.url,
         uploadedAt: new Date().toISOString()
       };
+
       const updatedImages = [...(unit.images || []), newImage];
       handleUpdate({ images: updatedImages });
+
       setShowImageNameDialog(false);
       setPendingImageData(null);
       setImageName('');
@@ -226,14 +248,13 @@ const MasterDataTab = ({ unit }) => {
         for (const type of clipboardItem.types) {
           if (type.startsWith('image/')) {
             const blob = await clipboardItem.getType(type);
-            // Convert blob to data URL for proper display
             const reader = new FileReader();
             reader.onload = (event) => {
               setPendingImageData({
                 file: blob,
                 url: event.target.result
               });
-              setImageName(`Bild_${new Date().toISOString().slice(0, 10)}`);
+              setImageName(generateSmartFilename(`Zwischenablage_${new Date().toISOString().slice(0, 10)}`));
               setShowImageNameDialog(true);
             };
             reader.readAsDataURL(blob);
@@ -257,7 +278,6 @@ const MasterDataTab = ({ unit }) => {
 
   const handleImageCopy = async (imageUrl) => {
     try {
-      // Convert data URL to blob for clipboard
       const response = await fetch(imageUrl);
       const blob = await response.blob();
       await navigator.clipboard.write([
@@ -480,6 +500,7 @@ const MasterDataTab = ({ unit }) => {
           <SafeIcon icon={FiFile} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">PowerPoint-Datei</h3>
         </div>
+
         {unit.powerPointFile ? (
           <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-between">
@@ -545,7 +566,7 @@ const MasterDataTab = ({ unit }) => {
           <SafeIcon icon={FiVideo} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Video</h3>
         </div>
-        
+
         {isVideoUploading && (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
@@ -609,11 +630,11 @@ const MasterDataTab = ({ unit }) => {
               Video hochladen
             </button>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Maximale Dateigröße: 100MB
+              Maximale Dateigröße: 500MB
             </p>
           </div>
         ) : null}
-        
+
         <input
           ref={videoInputRef}
           type="file"
@@ -708,6 +729,7 @@ const MasterDataTab = ({ unit }) => {
             <p className="text-gray-500 dark:text-gray-400 mb-4">Keine Bilder hochgeladen</p>
           </div>
         )}
+
         <input
           id="imageUpload"
           type="file"

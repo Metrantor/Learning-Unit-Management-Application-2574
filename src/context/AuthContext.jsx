@@ -19,42 +19,35 @@ export const AuthProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    // Load from localStorage
-    const savedUser = localStorage.getItem('mockUser');
-    const savedCodes = localStorage.getItem('invitationCodes');
-    const savedUsers = localStorage.getItem('users');
+    // FORCE RESET - Clear everything and start fresh
+    localStorage.removeItem('invitationCodes');
+    localStorage.removeItem('users');
+    localStorage.removeItem('mockUser');
     
-    if (savedUser) {
-      const userData = JSON.parse(savedUser);
-      setUser(userData);
-      setIsAuthenticated(true);
-    }
-    
-    if (savedCodes) {
-      setInvitationCodes(JSON.parse(savedCodes));
-    } else {
-      // Initialize with default admin code
-      const defaultCodes = [{
+    // Create fresh admin code
+    const defaultCodes = [
+      {
         id: uuidv4(),
         code: 'ADMIN2024',
         email: 'admin@example.com',
         role: 'admin',
         used: false,
         createdAt: new Date().toISOString()
-      }];
-      setInvitationCodes(defaultCodes);
-      localStorage.setItem('invitationCodes', JSON.stringify(defaultCodes));
-    }
+      }
+    ];
     
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    }
-    
+    setInvitationCodes(defaultCodes);
+    localStorage.setItem('invitationCodes', JSON.stringify(defaultCodes));
+    setUsers([]);
+    setIsAuthenticated(false);
+    setUser(null);
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('invitationCodes', JSON.stringify(invitationCodes));
+    if (invitationCodes.length > 0) {
+      localStorage.setItem('invitationCodes', JSON.stringify(invitationCodes));
+    }
   }, [invitationCodes]);
 
   useEffect(() => {
@@ -62,21 +55,28 @@ export const AuthProvider = ({ children }) => {
   }, [users]);
 
   const loginWithInvitationCode = (email, code) => {
+    console.log('Login attempt:', { email, code });
+    console.log('Available codes:', invitationCodes);
+    
     const invitation = invitationCodes.find(inv => 
       inv.code === code && 
       inv.email.toLowerCase() === email.toLowerCase() && 
       !inv.used
     );
-    
+
+    console.log('Found invitation:', invitation);
+
     if (!invitation) {
       throw new Error('Ungültiger Einladungscode oder E-Mail-Adresse');
     }
-    
+
     // Mark invitation as used
     setInvitationCodes(prev => prev.map(inv => 
-      inv.id === invitation.id ? { ...inv, used: true, usedAt: new Date().toISOString() } : inv
+      inv.id === invitation.id 
+        ? { ...inv, used: true, usedAt: new Date().toISOString() }
+        : inv
     ));
-    
+
     // Create user
     const newUser = {
       id: uuidv4(),
@@ -86,13 +86,14 @@ export const AuthProvider = ({ children }) => {
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
       createdAt: new Date().toISOString()
     };
-    
+
+    console.log('Creating user:', newUser);
+
     setUsers(prev => [...prev, newUser]);
     setUser(newUser);
     setIsAuthenticated(true);
-    
     localStorage.setItem('mockUser', JSON.stringify(newUser));
-    
+
     return newUser;
   };
 
@@ -100,11 +101,9 @@ export const AuthProvider = ({ children }) => {
     const updatedUser = { ...user, ...profileData };
     setUser(updatedUser);
     localStorage.setItem('mockUser', JSON.stringify(updatedUser));
-    
+
     // Update in users list too
-    setUsers(prev => prev.map(u => 
-      u.id === user.id ? updatedUser : u
-    ));
+    setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
   };
 
   const logout = () => {
@@ -122,7 +121,6 @@ export const AuthProvider = ({ children }) => {
       used: false,
       createdAt: new Date().toISOString()
     };
-    
     setInvitationCodes(prev => [...prev, newCode]);
     return newCode;
   };
@@ -132,9 +130,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUserRole = (userId, newRole) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, role: newRole } : u
-    ));
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     
     if (user && user.id === userId) {
       const updatedUser = { ...user, role: newRole };
@@ -157,7 +153,6 @@ export const AuthProvider = ({ children }) => {
     loginWithInvitationCode,
     updateUserProfile,
     logout,
-    
     // Admin functions
     invitationCodes,
     users,
