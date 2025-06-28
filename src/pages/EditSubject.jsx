@@ -31,7 +31,10 @@ const EditSubject = () => {
     return (
       <div className="text-center py-12">
         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Fachthema nicht gefunden</h3>
-        <button onClick={() => navigate('/')} className="text-primary-600 dark:text-primary-400">
+        <button
+          onClick={() => navigate('/')}
+          className="text-primary-600 dark:text-primary-400"
+        >
           Zurück zum Dashboard
         </button>
       </div>

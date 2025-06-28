@@ -7,7 +7,7 @@ import * as FiIcons from 'react-icons/fi';
 const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen } = FiIcons;
 
 const MasterDataTab = ({ unit }) => {
-  const { updateLearningUnit, topics, getTopic } = useLearningUnits();
+  const { updateLearningUnit, topics, getTopic, getTopicPath } = useLearningUnits();
   const [newGoal, setNewGoal] = useState('');
   const [newUrl, setNewUrl] = useState({ title: '', url: '' });
   const [imageName, setImageName] = useState('');
@@ -16,6 +16,7 @@ const MasterDataTab = ({ unit }) => {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [pendingImageData, setPendingImageData] = useState(null);
   const fileInputRef = useRef(null);
+  const xmlImportInputRef = useRef(null);
 
   const handleUpdate = (updates) => {
     updateLearningUnit(unit.id, updates);
@@ -23,6 +24,228 @@ const MasterDataTab = ({ unit }) => {
 
   const handleBasicInfoChange = (field, value) => {
     handleUpdate({ [field]: value });
+  };
+
+  // XML Export Function
+  const handleXmlExport = () => {
+    try {
+      const xmlData = {
+        title: unit.title || '',
+        description: unit.description || '',
+        editorialState: unit.editorialState || EDITORIAL_STATES.PLANNING,
+        learningGoals: unit.learningGoals || [],
+        notes: unit.notes || '',
+        speechText: unit.speechText || '',
+        explanation: unit.explanation || '',
+        urls: unit.urls || [],
+        textSnippets: (unit.textSnippets || []).map(snippet => ({
+          id: snippet.id,
+          content: snippet.content,
+          order: snippet.order,
+          approved: snippet.approved || false
+        })),
+        powerPointFileName: unit.powerPointFile?.name || null,
+        createdAt: unit.createdAt,
+        updatedAt: unit.updatedAt
+      };
+
+      // Create XML content
+      const xmlContent = createXmlFromData(xmlData);
+      
+      // Create and download file
+      const blob = new Blob([xmlContent], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `lerneinheit_${unit.title.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xml`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert('XML-Export erfolgreich heruntergeladen!');
+    } catch (error) {
+      console.error('Fehler beim XML-Export:', error);
+      alert('Fehler beim XML-Export: ' + error.message);
+    }
+  };
+
+  // XML Import Function
+  const handleXmlImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.xml')) {
+      alert('Bitte wählen Sie eine XML-Datei aus.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const xmlContent = e.target.result;
+        const importedData = parseXmlToData(xmlContent);
+        
+        if (window.confirm('Möchten Sie die aktuellen Daten wirklich durch die importierten Daten ersetzen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+          // Update learning unit with imported data
+          const updatedUnit = {
+            title: importedData.title || unit.title,
+            description: importedData.description || '',
+            editorialState: importedData.editorialState || EDITORIAL_STATES.PLANNING,
+            learningGoals: importedData.learningGoals || [],
+            notes: importedData.notes || '',
+            speechText: importedData.speechText || '',
+            explanation: importedData.explanation || '',
+            urls: importedData.urls || [],
+            textSnippets: importedData.textSnippets || [],
+            updatedAt: new Date().toISOString()
+          };
+
+          updateLearningUnit(unit.id, updatedUnit);
+          alert('XML-Import erfolgreich abgeschlossen!');
+        }
+      } catch (error) {
+        console.error('Fehler beim XML-Import:', error);
+        alert('Fehler beim XML-Import: ' + error.message);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    event.target.value = '';
+  };
+
+  // Helper function to create XML from data
+  const createXmlFromData = (data) => {
+    const escapeXml = (str) => {
+      if (!str) return '';
+      return str.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<lerneinheit>\n';
+    xml += `  <grunddaten>\n`;
+    xml += `    <titel>${escapeXml(data.title)}</titel>\n`;
+    xml += `    <beschreibung>${escapeXml(data.description)}</beschreibung>\n`;
+    xml += `    <redaktioneller_stand>${escapeXml(data.editorialState)}</redaktioneller_stand>\n`;
+    xml += `    <erstellt_am>${escapeXml(data.createdAt)}</erstellt_am>\n`;
+    xml += `    <aktualisiert_am>${escapeXml(data.updatedAt)}</aktualisiert_am>\n`;
+    xml += `  </grunddaten>\n`;
+
+    xml += `  <lernziele>\n`;
+    data.learningGoals.forEach(goal => {
+      xml += `    <lernziel id="${escapeXml(goal.id)}">\n`;
+      xml += `      <text>${escapeXml(goal.text)}</text>\n`;
+      xml += `      <erstellt_am>${escapeXml(goal.createdAt)}</erstellt_am>\n`;
+      xml += `    </lernziel>\n`;
+    });
+    xml += `  </lernziele>\n`;
+
+    xml += `  <notizen>${escapeXml(data.notes)}</notizen>\n`;
+    xml += `  <sprechtext>${escapeXml(data.speechText)}</sprechtext>\n`;
+    xml += `  <erklaerung>${escapeXml(data.explanation)}</erklaerung>\n`;
+
+    xml += `  <urls>\n`;
+    data.urls.forEach(url => {
+      xml += `    <url id="${escapeXml(url.id)}">\n`;
+      xml += `      <titel>${escapeXml(url.title)}</titel>\n`;
+      xml += `      <link>${escapeXml(url.url)}</link>\n`;
+      xml += `      <erstellt_am>${escapeXml(url.createdAt)}</erstellt_am>\n`;
+      xml += `    </url>\n`;
+    });
+    xml += `  </urls>\n`;
+
+    xml += `  <text_snippets>\n`;
+    data.textSnippets.forEach(snippet => {
+      xml += `    <snippet id="${escapeXml(snippet.id)}">\n`;
+      xml += `      <inhalt>${escapeXml(snippet.content)}</inhalt>\n`;
+      xml += `      <reihenfolge>${escapeXml(snippet.order)}</reihenfolge>\n`;
+      xml += `      <genehmigt>${snippet.approved ? 'true' : 'false'}</genehmigt>\n`;
+      xml += `    </snippet>\n`;
+    });
+    xml += `  </text_snippets>\n`;
+
+    if (data.powerPointFileName) {
+      xml += `  <powerpoint_datei>${escapeXml(data.powerPointFileName)}</powerpoint_datei>\n`;
+    }
+
+    xml += '</lerneinheit>';
+    return xml;
+  };
+
+  // Helper function to parse XML to data
+  const parseXmlToData = (xmlContent) => {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+
+    // Check for parsing errors
+    const parseError = xmlDoc.querySelector('parsererror');
+    if (parseError) {
+      throw new Error('Ungültiges XML-Format');
+    }
+
+    const getTextContent = (selector) => {
+      const element = xmlDoc.querySelector(selector);
+      return element ? element.textContent : '';
+    };
+
+    const data = {
+      title: getTextContent('grunddaten titel'),
+      description: getTextContent('grunddaten beschreibung'),
+      editorialState: getTextContent('grunddaten redaktioneller_stand') || EDITORIAL_STATES.PLANNING,
+      notes: getTextContent('notizen'),
+      speechText: getTextContent('sprechtext'),
+      explanation: getTextContent('erklaerung'),
+      learningGoals: [],
+      urls: [],
+      textSnippets: []
+    };
+
+    // Parse learning goals
+    const lernziele = xmlDoc.querySelectorAll('lernziele lernziel');
+    lernziele.forEach(ziel => {
+      const goal = {
+        id: ziel.getAttribute('id') || uuidv4(),
+        text: ziel.querySelector('text')?.textContent || '',
+        createdAt: ziel.querySelector('erstellt_am')?.textContent || new Date().toISOString()
+      };
+      data.learningGoals.push(goal);
+    });
+
+    // Parse URLs
+    const urls = xmlDoc.querySelectorAll('urls url');
+    urls.forEach(urlElement => {
+      const url = {
+        id: urlElement.getAttribute('id') || uuidv4(),
+        title: urlElement.querySelector('titel')?.textContent || '',
+        url: urlElement.querySelector('link')?.textContent || '',
+        createdAt: urlElement.querySelector('erstellt_am')?.textContent || new Date().toISOString()
+      };
+      data.urls.push(url);
+    });
+
+    // Parse text snippets
+    const snippets = xmlDoc.querySelectorAll('text_snippets snippet');
+    snippets.forEach(snippetElement => {
+      const snippet = {
+        id: snippetElement.getAttribute('id') || uuidv4(),
+        content: snippetElement.querySelector('inhalt')?.textContent || '',
+        order: parseInt(snippetElement.querySelector('reihenfolge')?.textContent) || 1,
+        approved: snippetElement.querySelector('genehmigt')?.textContent === 'true',
+        createdAt: new Date().toISOString(),
+        imageId: null,
+        rating: { up: 0, down: 0, userVotes: {} },
+        comments: []
+      };
+      data.textSnippets.push(snippet);
+    });
+
+    return data;
   };
 
   // Topic Move Function
@@ -105,8 +328,8 @@ const MasterDataTab = ({ unit }) => {
     }
   };
 
-  // Helper function to generate smart filename
-  const generateSmartFilename = (originalName = '') => {
+  // Helper function to generate unique filename with sequential numbering
+  const generateUniqueFilename = (originalName = '') => {
     const topic = unit.topicId ? getTopic(unit.topicId) : null;
     const topicName = topic?.title || '';
     const unitName = unit.title || '';
@@ -115,19 +338,31 @@ const MasterDataTab = ({ unit }) => {
     const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
     const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
 
-    // Use original name if provided, otherwise generate generic name
-    const baseName = originalName.replace(/\.[^/.]+$/, "") || `Bild_${Date.now()}`;
+    // Get current image count for sequential numbering
+    const currentImageCount = (unit.images || []).length + 1;
+    const sequentialNumber = String(currentImageCount).padStart(3, '0'); // 001, 002, etc.
 
+    // Generate timestamp with seconds
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0]; // YYYYMMDD_HHMMSS
+
+    // Use original name if provided, otherwise use generic name
+    const baseName = originalName.replace(/\.[^/.]+$/, "") || 'Bild';
+
+    // Construct unique filename
+    let filename = '';
     if (topicAbbr && unitAbbr) {
-      return `${topicAbbr}_${unitAbbr}_${baseName}`;
+      filename = `${topicAbbr}_${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
     } else if (unitAbbr) {
-      return `${unitAbbr}_${baseName}`;
+      filename = `${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
     } else {
-      return baseName;
+      filename = `${sequentialNumber}_${baseName}_${timestamp}`;
     }
+
+    return filename;
   };
 
-  // Image Management - Enhanced with smart naming
+  // Image Management - Enhanced with unique naming
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -136,7 +371,7 @@ const MasterDataTab = ({ unit }) => {
         reader.onload = (event) => {
           const imageData = { file, url: event.target.result };
           setPendingImageData(imageData);
-          setImageName(generateSmartFilename(file.name));
+          setImageName(generateUniqueFilename(file.name));
           setShowImageNameDialog(true);
         };
         reader.readAsDataURL(file);
@@ -174,7 +409,7 @@ const MasterDataTab = ({ unit }) => {
             const reader = new FileReader();
             reader.onload = (event) => {
               setPendingImageData({ file: blob, url: event.target.result });
-              setImageName(generateSmartFilename(`Zwischenablage_${new Date().toISOString().slice(0, 10)}`));
+              setImageName(generateUniqueFilename('Zwischenablage'));
               setShowImageNameDialog(true);
             };
             reader.readAsDataURL(blob);
@@ -224,6 +459,44 @@ const MasterDataTab = ({ unit }) => {
 
   return (
     <div className="space-y-8">
+      {/* XML Export/Import Section */}
+      <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <SafeIcon icon={FiFile} className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Daten Export/Import</h3>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              onClick={handleXmlExport}
+              className="inline-flex items-center px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm"
+            >
+              <SafeIcon icon={FiDownload} className="h-4 w-4 mr-2" />
+              XML exportieren
+            </button>
+            <button
+              onClick={() => xmlImportInputRef.current?.click()}
+              className="inline-flex items-center px-4 py-2 bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 transition-colors text-sm"
+            >
+              <SafeIcon icon={FiUpload} className="h-4 w-4 mr-2" />
+              XML importieren
+            </button>
+          </div>
+        </div>
+        <p className="text-sm text-blue-800 dark:text-blue-200">
+          <strong>Export:</strong> Lädt alle Texte, URLs und Snippets als XML-Datei herunter (ohne Bilder, Videos oder Kommentare).
+          <br />
+          <strong>Import:</strong> Ersetzt die aktuellen Daten durch die Inhalte einer XML-Datei.
+        </p>
+        <input
+          ref={xmlImportInputRef}
+          type="file"
+          accept=".xml"
+          onChange={handleXmlImport}
+          className="hidden"
+        />
+      </div>
+
       {/* Topic Assignment with Move Function */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
@@ -253,7 +526,7 @@ const MasterDataTab = ({ unit }) => {
             <option value="">Kein Thema ausgewählt</option>
             {topics.map((topic) => (
               <option key={topic.id} value={topic.id}>
-                {topic.title}
+                {getTopicPath(topic.id)}
               </option>
             ))}
           </select>
@@ -268,7 +541,7 @@ const MasterDataTab = ({ unit }) => {
       {/* Move to Topic Dialog */}
       {showMoveDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Lerneinheit verschieben</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Wählen Sie das Zielthema für diese Lerneinheit:
@@ -281,6 +554,7 @@ const MasterDataTab = ({ unit }) => {
                   className="w-full text-left p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900 transition-colors"
                 >
                   <div className="font-medium text-gray-900 dark:text-white">{topic.title}</div>
+                  <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">{getTopicPath(topic.id)}</div>
                   {topic.description && (
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{topic.description}</div>
                   )}

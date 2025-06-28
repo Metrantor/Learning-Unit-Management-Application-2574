@@ -5,16 +5,19 @@ import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage } = FiIcons;
+const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage, FiSettings } = FiIcons;
 
 const TrainingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { 
     getTraining, 
+    updateTraining,
+    subjects,
     getTrainingModulesByTraining, 
+    deleteTraining,
     deleteTrainingModule, 
-    getTrainingModuleStats,
+    getTrainingModuleStats, 
     getSubject 
   } = useLearningUnits();
 
@@ -43,10 +46,25 @@ const TrainingDetail = () => {
     return 'text-red-600 dark:text-red-400';
   };
 
-  const handleDelete = (moduleId, title) => {
-    if (window.confirm(`Möchten Sie das Trainingsmodul "${title}" wirklich löschen?`)) {
+  const handleDeleteModule = (moduleId, title) => {
+    if (window.confirm(`Möchten Sie das Trainingsmodul "${title}" wirklich löschen? Alle zugehörigen Themen und Lerneinheiten werden ebenfalls gelöscht.`)) {
       deleteTrainingModule(moduleId);
     }
+  };
+
+  const handleDeleteTraining = () => {
+    if (window.confirm(`Möchten Sie das Training "${training.title}" wirklich löschen? Alle zugehörigen Module, Themen und Lerneinheiten werden ebenfalls gelöscht.`)) {
+      deleteTraining(training.id);
+      if (subject) {
+        navigate(`/subjects/${subject.id}`);
+      } else {
+        navigate('/');
+      }
+    }
+  };
+
+  const handleSubjectChange = (newSubjectId) => {
+    updateTraining(training.id, { subjectId: newSubjectId || null });
   };
 
   return (
@@ -59,9 +77,8 @@ const TrainingDetail = () => {
           <SafeIcon icon={FiArrowLeft} className="h-4 w-4 mr-2" />
           {subject ? `Zurück zu ${subject.title}` : 'Zurück zum Dashboard'}
         </button>
-        
         <div className="flex justify-between items-start">
-          <div>
+          <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{training.title}</h2>
             {subject && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
@@ -72,13 +89,47 @@ const TrainingDetail = () => {
               <p className="text-gray-600 dark:text-gray-400 mt-2">{training.description}</p>
             )}
           </div>
-          <Link
-            to={`/trainings/${training.id}/edit`}
-            className="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          <div className="flex space-x-2 ml-4">
+            <Link
+              to={`/trainings/${training.id}/edit`}
+              className="inline-flex items-center px-3 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+            >
+              <SafeIcon icon={FiEdit} className="h-4 w-4 mr-2" />
+              Bearbeiten
+            </Link>
+            <button
+              onClick={handleDeleteTraining}
+              className="inline-flex items-center px-3 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
+            >
+              <SafeIcon icon={FiTrash2} className="h-4 w-4 mr-2" />
+              Löschen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Subject Assignment */}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+        <div className="flex items-center mb-4">
+          <SafeIcon icon={FiSettings} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Fachthema-Zuordnung</h3>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Fachthema auswählen
+          </label>
+          <select
+            value={training.subjectId || ''}
+            onChange={(e) => handleSubjectChange(e.target.value || null)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           >
-            <SafeIcon icon={FiEdit} className="h-4 w-4 mr-2" />
-            Bearbeiten
-          </Link>
+            <option value="">Kein Fachthema ausgewählt</option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.title}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -112,7 +163,6 @@ const TrainingDetail = () => {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {trainingModules.map((module, index) => {
             const stats = getTrainingModuleStats(module.id);
-            
             return (
               <motion.div
                 key={module.id}
@@ -120,7 +170,7 @@ const TrainingDetail = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => window.location.href = `#/training-modules/${module.id}`}
+                onClick={() => navigate(`/training-modules/${module.id}`)}
               >
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-4">
@@ -166,7 +216,7 @@ const TrainingDetail = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.location.href = `#/training-modules/${module.id}`;
+                        navigate(`/training-modules/${module.id}`);
                       }}
                       className="inline-flex items-center px-3 py-2 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors text-sm"
                     >
@@ -176,7 +226,7 @@ const TrainingDetail = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(module.id, module.title);
+                        handleDeleteModule(module.id, module.title);
                       }}
                       className="inline-flex items-center px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg transition-colors text-sm"
                     >

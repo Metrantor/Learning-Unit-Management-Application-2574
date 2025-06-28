@@ -54,8 +54,8 @@ const ExplanationTab = ({ unit }) => {
     });
   };
 
-  // Helper function to generate smart filename for explanation images
-  const generateSmartFilename = (originalName = '') => {
+  // Helper function to generate unique filename for explanation images
+  const generateUniqueFilename = (originalName = '') => {
     const topic = unit.topicId ? getTopic(unit.topicId) : null;
     const topicName = topic?.title || '';
     const unitName = unit.title || '';
@@ -64,16 +64,28 @@ const ExplanationTab = ({ unit }) => {
     const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
     const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
 
-    // Use original name if provided, otherwise generate generic name
-    const baseName = originalName.replace(/\.[^/.]+$/, "") || `Erklaerung_${Date.now()}`;
+    // Get current image count for sequential numbering
+    const currentImageCount = (unit.images || []).length + 1;
+    const sequentialNumber = String(currentImageCount).padStart(3, '0'); // 001, 002, etc.
 
+    // Generate timestamp with seconds
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0]; // YYYYMMDD_HHMMSS
+
+    // Use original name if provided, otherwise generate generic name
+    const baseName = originalName.replace(/\.[^/.]+$/, "") || 'Erklaerung';
+
+    // Construct unique filename
+    let filename = '';
     if (topicAbbr && unitAbbr) {
-      return `${topicAbbr}_${unitAbbr}_${baseName}`;
+      filename = `${topicAbbr}_${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
     } else if (unitAbbr) {
-      return `${unitAbbr}_${baseName}`;
+      filename = `${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
     } else {
-      return baseName;
+      filename = `${sequentialNumber}_${baseName}_${timestamp}`;
     }
+
+    return filename;
   };
 
   // Image Management for Explanation
@@ -85,7 +97,7 @@ const ExplanationTab = ({ unit }) => {
         reader.onload = (event) => {
           const imageData = { file, url: event.target.result };
           setPendingImageData(imageData);
-          setImageName(generateSmartFilename(file.name));
+          setImageName(generateUniqueFilename(file.name));
           setShowImageNameDialog(true);
         };
         reader.readAsDataURL(file);
@@ -125,7 +137,7 @@ const ExplanationTab = ({ unit }) => {
             const reader = new FileReader();
             reader.onload = (event) => {
               setPendingImageData({ file: blob, url: event.target.result });
-              setImageName(generateSmartFilename(`Erklaerung_Zwischenablage_${new Date().toISOString().slice(0, 10)}`));
+              setImageName(generateUniqueFilename('Erklaerung_Zwischenablage'));
               setShowImageNameDialog(true);
             };
             reader.readAsDataURL(blob);
@@ -330,7 +342,11 @@ const ExplanationTab = ({ unit }) => {
             data-color-mode="auto"
             textareaProps={{
               placeholder: 'Schreiben Sie hier Ihre schriftliche Erklärung...\n\n**Sie können Markdown verwenden:**\n- **Fett** oder *kursiv*\n- [Links](http://example.com)\n- ![Bilder](url)\n- Listen und mehr',
-              style: { fontSize: 14, lineHeight: 1.5, minHeight: 400 }
+              style: {
+                fontSize: 14,
+                lineHeight: 1.5,
+                minHeight: 400
+              }
             }}
           />
         </div>
@@ -359,17 +375,12 @@ const ExplanationTab = ({ unit }) => {
             )}
           </div>
         </div>
-
         <div className="p-4">
           {/* Add Comment */}
           <div className="mb-6">
             <div className="flex space-x-3">
               <div className="flex-shrink-0">
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-8 h-8 rounded-full"
-                />
+                <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full" />
               </div>
               <div className="flex-1">
                 <textarea
@@ -399,11 +410,7 @@ const ExplanationTab = ({ unit }) => {
               {unit.explanationComments.map((comment) => (
                 <div key={comment.id} className="flex space-x-3">
                   <div className="flex-shrink-0">
-                    <img
-                      src={comment.author.avatar}
-                      alt={comment.author.name}
-                      className="w-8 h-8 rounded-full"
-                    />
+                    <img src={comment.author.avatar} alt={comment.author.name} className="w-8 h-8 rounded-full" />
                   </div>
                   <div className="flex-1">
                     <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">

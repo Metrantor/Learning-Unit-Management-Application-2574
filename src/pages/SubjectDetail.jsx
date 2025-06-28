@@ -5,12 +5,18 @@ import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage } = FiIcons;
+const { FiArrowLeft, FiPlus, FiEdit, FiTrash2, FiCalendar, FiTrendingUp, FiPackage, FiSettings } = FiIcons;
 
 const SubjectDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getSubject, getTrainingsBySubject, deleteTraining, getTrainingStats } = useLearningUnits();
+  const { 
+    getSubject, 
+    getTrainingsBySubject, 
+    deleteSubject,
+    deleteTraining, 
+    getTrainingStats 
+  } = useLearningUnits();
 
   const subject = getSubject(id);
   const trainings = getTrainingsBySubject(id);
@@ -36,9 +42,16 @@ const SubjectDetail = () => {
     return 'text-red-600 dark:text-red-400';
   };
 
-  const handleDelete = (trainingId, title) => {
-    if (window.confirm(`Möchten Sie das Training "${title}" wirklich löschen?`)) {
+  const handleDeleteTraining = (trainingId, title) => {
+    if (window.confirm(`Möchten Sie das Training "${title}" wirklich löschen? Alle zugehörigen Module, Themen und Lerneinheiten werden ebenfalls gelöscht.`)) {
       deleteTraining(trainingId);
+    }
+  };
+
+  const handleDeleteSubject = () => {
+    if (window.confirm(`Möchten Sie das Fachthema "${subject.title}" wirklich löschen? Alle zugehörigen Trainings, Module, Themen und Lerneinheiten werden ebenfalls gelöscht.`)) {
+      deleteSubject(subject.id);
+      navigate('/');
     }
   };
 
@@ -59,13 +72,22 @@ const SubjectDetail = () => {
               <p className="text-gray-600 dark:text-gray-400 mt-2">{subject.description}</p>
             )}
           </div>
-          <Link
-            to={`/subjects/${subject.id}/edit`}
-            className="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            <SafeIcon icon={FiEdit} className="h-4 w-4 mr-2" />
-            Bearbeiten
-          </Link>
+          <div className="flex space-x-2">
+            <Link
+              to={`/subjects/${subject.id}/edit`}
+              className="inline-flex items-center px-3 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+            >
+              <SafeIcon icon={FiEdit} className="h-4 w-4 mr-2" />
+              Bearbeiten
+            </Link>
+            <button
+              onClick={handleDeleteSubject}
+              className="inline-flex items-center px-3 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
+            >
+              <SafeIcon icon={FiTrash2} className="h-4 w-4 mr-2" />
+              Löschen
+            </button>
+          </div>
         </div>
       </div>
 
@@ -99,7 +121,6 @@ const SubjectDetail = () => {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {trainings.map((training, index) => {
             const stats = getTrainingStats(training.id);
-            
             return (
               <motion.div
                 key={training.id}
@@ -107,7 +128,7 @@ const SubjectDetail = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => window.location.href = `#/trainings/${training.id}`}
+                onClick={() => navigate(`/trainings/${training.id}`)}
               >
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-4">
@@ -157,7 +178,7 @@ const SubjectDetail = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.location.href = `#/trainings/${training.id}`;
+                        navigate(`/trainings/${training.id}`);
                       }}
                       className="inline-flex items-center px-3 py-2 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors text-sm"
                     >
@@ -167,7 +188,7 @@ const SubjectDetail = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(training.id, training.title);
+                        handleDeleteTraining(training.id, training.title);
                       }}
                       className="inline-flex items-center px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg transition-colors text-sm"
                     >

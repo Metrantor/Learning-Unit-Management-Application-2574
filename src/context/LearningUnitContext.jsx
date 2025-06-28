@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from './AuthContext';
 
 const LearningUnitContext = createContext();
 
@@ -11,13 +12,6 @@ export const EDITORIAL_STATES = {
   PUBLISHED: 'Veröffentlicht'
 };
 
-// Mock user for demonstration
-const currentUser = {
-  id: 'user-1',
-  name: 'Max Mustermann',
-  avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face'
-};
-
 export const useLearningUnits = () => {
   const context = useContext(LearningUnitContext);
   if (!context) {
@@ -27,6 +21,8 @@ export const useLearningUnits = () => {
 };
 
 export const LearningUnitProvider = ({ children }) => {
+  const { user: currentUser } = useAuth();
+  
   // State for all hierarchy levels
   const [subjects, setSubjects] = useState([]);
   const [trainings, setTrainings] = useState([]);
@@ -40,7 +36,7 @@ export const LearningUnitProvider = ({ children }) => {
     const savedModules = localStorage.getItem('trainingModules');
     const savedTopics = localStorage.getItem('topics');
     const savedUnits = localStorage.getItem('learningUnits');
-    
+
     if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
     if (savedTrainings) setTrainings(JSON.parse(savedTrainings));
     if (savedModules) setTrainingModules(JSON.parse(savedModules));
@@ -92,7 +88,6 @@ export const LearningUnitProvider = ({ children }) => {
     // Cascade delete trainings
     const associatedTrainings = trainings.filter(training => training.subjectId === id);
     associatedTrainings.forEach(training => deleteTraining(training.id));
-    
     setSubjects(prev => prev.filter(subject => subject.id !== id));
   };
 
@@ -124,7 +119,6 @@ export const LearningUnitProvider = ({ children }) => {
     // Cascade delete training modules
     const associatedModules = trainingModules.filter(module => module.trainingId === id);
     associatedModules.forEach(module => deleteTrainingModule(module.id));
-    
     setTrainings(prev => prev.filter(training => training.id !== id));
   };
 
@@ -160,7 +154,6 @@ export const LearningUnitProvider = ({ children }) => {
     // Cascade delete topics
     const associatedTopics = topics.filter(topic => topic.trainingModuleId === id);
     associatedTopics.forEach(topic => deleteTopic(topic.id));
-    
     setTrainingModules(prev => prev.filter(module => module.id !== id));
   };
 
@@ -195,9 +188,7 @@ export const LearningUnitProvider = ({ children }) => {
   const deleteTopic = (id) => {
     // Remove topic reference from learning units
     setLearningUnits(prev => prev.map(unit => 
-      unit.topicId === id 
-        ? { ...unit, topicId: null }
-        : unit
+      unit.topicId === id ? { ...unit, topicId: null } : unit
     ));
     setTopics(prev => prev.filter(topic => topic.id !== id));
   };
@@ -214,19 +205,37 @@ export const LearningUnitProvider = ({ children }) => {
     return learningUnits.filter(unit => unit.topicId === topicId);
   };
 
+  // Helper function to get full topic path
+  const getTopicPath = (topicId) => {
+    const topic = getTopic(topicId);
+    if (!topic) return '';
+    
+    const module = topic.trainingModuleId ? getTrainingModule(topic.trainingModuleId) : null;
+    const training = module?.trainingId ? getTraining(module.trainingId) : null;
+    const subject = training?.subjectId ? getSubject(training.subjectId) : null;
+    
+    const parts = [];
+    if (subject) parts.push(subject.title);
+    if (training) parts.push(training.title);
+    if (module) parts.push(module.title);
+    parts.push(topic.title);
+    
+    return parts.join(' → ');
+  };
+
   // Statistics functions
   const getSubjectStats = (subjectId) => {
     const subjectTrainings = getTrainingsBySubject(subjectId);
     const modulesInSubject = subjectTrainings.flatMap(training => getTrainingModulesByTraining(training.id));
     const topicsInSubject = modulesInSubject.flatMap(module => getTopicsByTrainingModule(module.id));
     const unitsInSubject = topicsInSubject.flatMap(topic => getLearningUnitsByTopic(topic.id));
-    
+
     const totalUnits = unitsInSubject.length;
     const readyOrPublishedUnits = unitsInSubject.filter(unit => 
       unit.editorialState === EDITORIAL_STATES.READY || 
       unit.editorialState === EDITORIAL_STATES.PUBLISHED
     ).length;
-    
+
     return {
       trainings: subjectTrainings.length,
       modules: modulesInSubject.length,
@@ -241,13 +250,13 @@ export const LearningUnitProvider = ({ children }) => {
     const modulesInTraining = getTrainingModulesByTraining(trainingId);
     const topicsInTraining = modulesInTraining.flatMap(module => getTopicsByTrainingModule(module.id));
     const unitsInTraining = topicsInTraining.flatMap(topic => getLearningUnitsByTopic(topic.id));
-    
+
     const totalUnits = unitsInTraining.length;
     const readyOrPublishedUnits = unitsInTraining.filter(unit => 
       unit.editorialState === EDITORIAL_STATES.READY || 
       unit.editorialState === EDITORIAL_STATES.PUBLISHED
     ).length;
-    
+
     return {
       modules: modulesInTraining.length,
       topics: topicsInTraining.length,
@@ -260,13 +269,13 @@ export const LearningUnitProvider = ({ children }) => {
   const getTrainingModuleStats = (moduleId) => {
     const topicsInModule = getTopicsByTrainingModule(moduleId);
     const unitsInModule = topicsInModule.flatMap(topic => getLearningUnitsByTopic(topic.id));
-    
+
     const totalUnits = unitsInModule.length;
     const readyOrPublishedUnits = unitsInModule.filter(unit => 
       unit.editorialState === EDITORIAL_STATES.READY || 
       unit.editorialState === EDITORIAL_STATES.PUBLISHED
     ).length;
-    
+
     return {
       topics: topicsInModule.length,
       totalUnits,
@@ -278,7 +287,7 @@ export const LearningUnitProvider = ({ children }) => {
   const getTopicStats = (topicId) => {
     const units = getLearningUnitsByTopic(topicId);
     const total = units.length;
-    
+
     if (total === 0) {
       return { total: 0, readyOrPublished: 0, percentage: 0, statusCounts: {} };
     }
@@ -298,7 +307,7 @@ export const LearningUnitProvider = ({ children }) => {
     return { total, readyOrPublished, percentage, statusCounts };
   };
 
-  // Learning Unit Management (existing functions)
+  // Learning Unit Management
   const createLearningUnit = (unitData) => {
     const newUnit = {
       id: uuidv4(),
@@ -306,15 +315,19 @@ export const LearningUnitProvider = ({ children }) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       editorialState: EDITORIAL_STATES.PLANNING,
-      learningGoals: [],
-      notes: '',
-      speechText: '',
-      explanation: '',
-      textSnippets: [],
-      powerPointFile: null,
-      images: [],
-      comments: [],
-      topicId: unitData.topicId || null
+      learningGoals: unitData.learningGoals || [],
+      notes: unitData.notes || '',
+      speechText: unitData.speechText || '',
+      explanation: unitData.explanation || '',
+      textSnippets: unitData.textSnippets || [],
+      powerPointFile: unitData.powerPointFile || null,
+      images: unitData.images || [],
+      comments: unitData.comments || [],
+      explanationComments: unitData.explanationComments || [],
+      speechTextComments: unitData.speechTextComments || [],
+      topicId: unitData.topicId || null,
+      urls: unitData.urls || [],
+      video: unitData.video || null
     };
     setLearningUnits(prev => [...prev, newUnit]);
     return newUnit;
@@ -397,7 +410,7 @@ export const LearningUnitProvider = ({ children }) => {
 
   const rateSnippet = (unitId, snippetId, isUpvote) => {
     const unit = getLearningUnit(unitId);
-    if (!unit) return;
+    if (!unit || !currentUser) return;
 
     const updatedSnippets = unit.textSnippets.map(snippet => {
       if (snippet.id === snippetId) {
@@ -430,7 +443,7 @@ export const LearningUnitProvider = ({ children }) => {
 
   const addComment = (unitId, snippetId, content, isUnitComment = false) => {
     const unit = getLearningUnit(unitId);
-    if (!unit) return;
+    if (!unit || !currentUser) return;
 
     const newComment = {
       id: uuidv4(),
@@ -440,12 +453,15 @@ export const LearningUnitProvider = ({ children }) => {
     };
 
     if (isUnitComment) {
-      const updatedComments = [...(unit.comments || []), newComment];
+      const updatedComments = [newComment, ...(unit.comments || [])];
       updateLearningUnit(unitId, { comments: updatedComments });
     } else {
       const updatedSnippets = unit.textSnippets.map(snippet => {
         if (snippet.id === snippetId) {
-          return { ...snippet, comments: [...(snippet.comments || []), newComment] };
+          return {
+            ...snippet,
+            comments: [newComment, ...(snippet.comments || [])]
+          };
         }
         return snippet;
       });
@@ -461,7 +477,7 @@ export const LearningUnitProvider = ({ children }) => {
     deleteSubject,
     getSubject,
     getSubjectStats,
-    
+
     // Trainings
     trainings,
     createTraining,
@@ -470,7 +486,7 @@ export const LearningUnitProvider = ({ children }) => {
     getTraining,
     getTrainingsBySubject,
     getTrainingStats,
-    
+
     // Training Modules
     trainingModules,
     createTrainingModule,
@@ -479,7 +495,7 @@ export const LearningUnitProvider = ({ children }) => {
     getTrainingModule,
     getTrainingModulesByTraining,
     getTrainingModuleStats,
-    
+
     // Topics
     topics,
     createTopic,
@@ -488,7 +504,8 @@ export const LearningUnitProvider = ({ children }) => {
     getTopic,
     getTopicsByTrainingModule,
     getTopicStats,
-    
+    getTopicPath,
+
     // Learning Units
     learningUnits,
     createLearningUnit,
@@ -503,6 +520,7 @@ export const LearningUnitProvider = ({ children }) => {
     reorderSnippets,
     rateSnippet,
     addComment,
+
     currentUser,
     EDITORIAL_STATES
   };

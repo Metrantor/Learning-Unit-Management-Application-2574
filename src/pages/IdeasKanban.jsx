@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiPlus, FiEdit, FiTrash2, FiMessageCircle, FiTag, FiCalendar, FiUser, FiSend, FiLink, FiEye } = FiIcons;
+const { FiPlus, FiEdit, FiTrash2, FiMessageCircle, FiTag, FiCalendar, FiUser, FiSend, FiLink, FiEye, FiZap } = FiIcons;
 
 const ITEM_TYPE = 'IDEA';
 
@@ -197,7 +197,11 @@ const IdeaDetailModal = ({ idea, isOpen, onClose, onUpdate, onAddComment, onAddU
             {/* Add Comment */}
             <div className="mb-4">
               <div className="flex space-x-3">
-                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full flex-shrink-0" />
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  className="w-8 h-8 rounded-full flex-shrink-0"
+                />
                 <div className="flex-1">
                   <textarea
                     value={newComment}
@@ -220,12 +224,16 @@ const IdeaDetailModal = ({ idea, isOpen, onClose, onUpdate, onAddComment, onAddU
               </div>
             </div>
 
-            {/* Comments List */}
+            {/* Comments List - Newest First */}
             {idea.comments && idea.comments.length > 0 ? (
               <div className="space-y-3">
                 {idea.comments.map((comment) => (
                   <div key={comment.id} className="flex space-x-3">
-                    <img src={comment.author.avatar} alt={comment.author.name} className="w-8 h-8 rounded-full flex-shrink-0" />
+                    <img
+                      src={comment.author.avatar}
+                      alt={comment.author.name}
+                      className="w-8 h-8 rounded-full flex-shrink-0"
+                    />
                     <div className="flex-1">
                       <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-1">
@@ -535,6 +543,15 @@ const IdeasKanban = () => {
     setSelectedIdea(idea);
   };
 
+  const handleAddComment = (ideaId, content) => {
+    addComment(ideaId, content);
+    // Refresh the selected idea to show the new comment immediately
+    const updatedIdea = ideas.find(i => i.id === ideaId);
+    if (selectedIdea && selectedIdea.id === ideaId) {
+      setSelectedIdea(updatedIdea);
+    }
+  };
+
   const groupedIdeas = Object.values(IDEA_STATES).reduce((acc, state) => {
     acc[state] = getIdeasByState(state);
     return acc;
@@ -594,7 +611,7 @@ const IdeasKanban = () => {
           isOpen={!!selectedIdea}
           onClose={() => setSelectedIdea(null)}
           onUpdate={updateIdea}
-          onAddComment={addComment}
+          onAddComment={handleAddComment}
           onAddUrl={addUrl}
           onDeleteComment={deleteComment}
           onDeleteUrl={deleteUrl}
