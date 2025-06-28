@@ -42,7 +42,11 @@ const AppContent = () => {
   }
 
   if (!isAuthenticated) {
-    return <LoginForm />;
+    return (
+      <DiaflowWrapper>
+        <LoginForm />
+      </DiaflowWrapper>
+    );
   }
 
   return (

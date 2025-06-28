@@ -10,7 +10,7 @@ const { FiSave, FiArrowLeft, FiUsers } = FiIcons;
 const CreateTraining = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { createTraining, subjects } = useLearningUnits();
+  const { createTraining } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -51,26 +51,6 @@ const CreateTraining = () => {
         className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="subjectId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Fachthema zuordnen
-            </label>
-            <select
-              id="subjectId"
-              name="subjectId"
-              value={formData.subjectId}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Kein Fachthema ausgewählt</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Titel des Trainings *

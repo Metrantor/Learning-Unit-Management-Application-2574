@@ -10,7 +10,7 @@ const { FiSave, FiArrowLeft, FiUpload, FiFile } = FiIcons;
 const CreateLearningUnit = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { createLearningUnit, topics, getTopicPath } = useLearningUnits();
+  const { createLearningUnit } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -49,7 +49,7 @@ const CreateLearningUnit = () => {
       try {
         const xmlContent = e.target.result;
         const importedData = parseXmlToData(xmlContent);
-        
+
         // Update form data with imported data
         setFormData(prev => ({
           ...prev,
@@ -80,6 +80,7 @@ const CreateLearningUnit = () => {
         alert('Fehler beim XML-Import: ' + error.message);
       }
     };
+
     reader.readAsText(file);
     event.target.value = '';
   };
@@ -88,7 +89,7 @@ const CreateLearningUnit = () => {
   const parseXmlToData = (xmlContent) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-
+    
     const parseError = xmlDoc.querySelector('parsererror');
     if (parseError) {
       throw new Error('Ungültiges XML-Format');
@@ -166,7 +167,7 @@ const CreateLearningUnit = () => {
         },
         createdAt: commentElement.querySelector('erstellt_am')?.textContent || new Date().toISOString()
       };
-      
+
       // Distribute comments to appropriate arrays based on context
       if (comment.context === 'explanation') {
         data.explanationComments.push(comment);
@@ -223,26 +224,6 @@ const CreateLearningUnit = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="topicId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Thema zuordnen
-            </label>
-            <select
-              id="topicId"
-              name="topicId"
-              value={formData.topicId}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Kein Thema ausgewählt</option>
-              {topics.map((topic) => (
-                <option key={topic.id} value={topic.id}>
-                  {getTopicPath(topic.id)}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Titel der Lerneinheit *

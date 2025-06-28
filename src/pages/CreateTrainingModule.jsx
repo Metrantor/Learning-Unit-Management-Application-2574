@@ -10,7 +10,7 @@ const { FiSave, FiArrowLeft, FiLayers } = FiIcons;
 const CreateTrainingModule = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { createTrainingModule, trainings } = useLearningUnits();
+  const { createTrainingModule } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -51,26 +51,6 @@ const CreateTrainingModule = () => {
         className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="trainingId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Training zuordnen
-            </label>
-            <select
-              id="trainingId"
-              name="trainingId"
-              value={formData.trainingId}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Kein Training ausgewählt</option>
-              {trainings.map((training) => (
-                <option key={training.id} value={training.id}>
-                  {training.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Titel des Trainingsmoduls *
