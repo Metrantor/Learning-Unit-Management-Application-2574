@@ -1,28 +1,51 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiSave, FiArrowLeft } = FiIcons;
+const { FiSave, FiArrowLeft, FiUsers } = FiIcons;
 
-const CreateTopic = () => {
+const EditTraining = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { createTopic, trainingModules } = useLearningUnits();
+  const { getTraining, updateTraining, subjects } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    trainingModuleId: searchParams.get('trainingModuleId') || ''
+    subjectId: ''
   });
+
+  const training = getTraining(id);
+
+  useEffect(() => {
+    if (training) {
+      setFormData({
+        title: training.title,
+        description: training.description || '',
+        subjectId: training.subjectId || ''
+      });
+    }
+  }, [training]);
+
+  if (!training) {
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Training nicht gefunden</h3>
+        <button onClick={() => navigate('/')} className="text-primary-600 dark:text-primary-400">
+          Zurück zum Dashboard
+        </button>
+      </div>
+    );
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    const newTopic = createTopic(formData);
-    navigate(`/topics/${newTopic.id}`);
+    updateTraining(id, formData);
+    navigate(`/trainings/${id}`);
   };
 
   const handleChange = (e) => {
@@ -36,13 +59,13 @@ const CreateTopic = () => {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(`/trainings/${id}`)}
           className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
         >
           <SafeIcon icon={FiArrowLeft} className="h-4 w-4 mr-2" />
-          Zurück zum Dashboard
+          Zurück zu {training.title}
         </button>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Neues Thema erstellen</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Training bearbeiten</h2>
       </div>
 
       <motion.div
@@ -52,20 +75,20 @@ const CreateTopic = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="trainingModuleId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Trainingsmodul zuordnen
+            <label htmlFor="subjectId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Fachthema zuordnen
             </label>
             <select
-              id="trainingModuleId"
-              name="trainingModuleId"
-              value={formData.trainingModuleId}
+              id="subjectId"
+              name="subjectId"
+              value={formData.subjectId}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="">Kein Trainingsmodul ausgewählt</option>
-              {trainingModules.map((module) => (
-                <option key={module.id} value={module.id}>
-                  {module.title}
+              <option value="">Kein Fachthema ausgewählt</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.title}
                 </option>
               ))}
             </select>
@@ -73,7 +96,7 @@ const CreateTopic = () => {
 
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Titel des Themas *
+              Titel des Trainings *
             </label>
             <input
               type="text"
@@ -83,7 +106,6 @@ const CreateTopic = () => {
               onChange={handleChange}
               required
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Geben Sie einen aussagekräftigen Titel ein..."
             />
           </div>
 
@@ -98,14 +120,14 @@ const CreateTopic = () => {
               onChange={handleChange}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Beschreiben Sie das Thema und die geplanten Lerneinheiten..."
+              placeholder="Beschreiben Sie das Training und seine Inhalte..."
             />
           </div>
 
           <div className="flex justify-end space-x-3">
             <button
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate(`/trainings/${id}`)}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
             >
               Abbrechen
@@ -116,7 +138,7 @@ const CreateTopic = () => {
               className="inline-flex items-center px-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <SafeIcon icon={FiSave} className="h-4 w-4 mr-2" />
-              Erstellen
+              Speichern
             </button>
           </div>
         </form>
@@ -125,4 +147,4 @@ const CreateTopic = () => {
   );
 };
 
-export default CreateTopic;
+export default EditTraining;

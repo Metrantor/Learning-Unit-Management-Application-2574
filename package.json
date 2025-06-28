@@ -1,5 +1,5 @@
 {
-  "name": "learning-unit-manager",
+  "name": "skillbase-workshop",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "npm run lint && vite build",
     "lint": "eslint .",
-    "lint:error": "eslint . --quiet", 
+    "lint:error": "eslint . --quiet",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -25,7 +25,10 @@
     "@uiw/react-md-editor": "^3.25.6",
     "react-beautiful-dnd": "^13.1.1",
     "react-sortablejs": "^6.1.4",
-    "sortablejs": "^1.15.0"
+    "sortablejs": "^1.15.0",
+    "@auth0/auth0-react": "^2.2.4",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

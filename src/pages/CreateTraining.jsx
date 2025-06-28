@@ -5,24 +5,24 @@ import { useLearningUnits } from '../context/LearningUnitContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiSave, FiArrowLeft } = FiIcons;
+const { FiSave, FiArrowLeft, FiUsers } = FiIcons;
 
-const CreateTopic = () => {
+const CreateTraining = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { createTopic, trainingModules } = useLearningUnits();
+  const { createTraining, subjects } = useLearningUnits();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    trainingModuleId: searchParams.get('trainingModuleId') || ''
+    subjectId: searchParams.get('subjectId') || ''
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    const newTopic = createTopic(formData);
-    navigate(`/topics/${newTopic.id}`);
+    const newTraining = createTraining(formData);
+    navigate(`/trainings/${newTraining.id}`);
   };
 
   const handleChange = (e) => {
@@ -42,7 +42,7 @@ const CreateTopic = () => {
           <SafeIcon icon={FiArrowLeft} className="h-4 w-4 mr-2" />
           Zurück zum Dashboard
         </button>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Neues Thema erstellen</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Neues Training erstellen</h2>
       </div>
 
       <motion.div
@@ -52,20 +52,20 @@ const CreateTopic = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="trainingModuleId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Trainingsmodul zuordnen
+            <label htmlFor="subjectId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Fachthema zuordnen
             </label>
             <select
-              id="trainingModuleId"
-              name="trainingModuleId"
-              value={formData.trainingModuleId}
+              id="subjectId"
+              name="subjectId"
+              value={formData.subjectId}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="">Kein Trainingsmodul ausgewählt</option>
-              {trainingModules.map((module) => (
-                <option key={module.id} value={module.id}>
-                  {module.title}
+              <option value="">Kein Fachthema ausgewählt</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.title}
                 </option>
               ))}
             </select>
@@ -73,7 +73,7 @@ const CreateTopic = () => {
 
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Titel des Themas *
+              Titel des Trainings *
             </label>
             <input
               type="text"
@@ -98,7 +98,7 @@ const CreateTopic = () => {
               onChange={handleChange}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Beschreiben Sie das Thema und die geplanten Lerneinheiten..."
+              placeholder="Beschreiben Sie das Training und seine Inhalte..."
             />
           </div>
 
@@ -125,4 +125,4 @@ const CreateTopic = () => {
   );
 };
 
-export default CreateTopic;
+export default CreateTraining;
