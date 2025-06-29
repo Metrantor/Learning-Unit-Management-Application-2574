@@ -2,17 +2,19 @@ import React, { useState, useRef } from 'react';
 import { useLearningUnits } from '../../context/LearningUnitContext';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
+import supabase from '../../lib/supabase';
 
 const { FiVideo, FiUpload, FiDownload, FiTrash2, FiPlay, FiMessageCircle, FiSend, FiUser } = FiIcons;
 
 const VideoTab = ({ unit }) => {
   const { updateLearningUnit, currentUser } = useLearningUnits();
   const [isVideoUploading, setIsVideoUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [newComment, setNewComment] = useState('');
   const videoInputRef = useRef(null);
 
-  // Video File Management
-  const handleVideoUpload = (e) => {
+  // 🚀 FIXED: Real Supabase Storage Upload (NO BASE64!)
+  const handleVideoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -21,7 +23,7 @@ const VideoTab = ({ unit }) => {
       return;
     }
 
-    // Check file size (limit to 500MB for better compatibility)
+    // Check file size (limit to 500MB for Supabase)
     const maxSize = 500 * 1024 * 1024; // 500MB
     if (file.size > maxSize) {
       alert('Die Videodatei ist zu groß. Maximale Größe: 500MB');
@@ -29,27 +31,88 @@ const VideoTab = ({ unit }) => {
     }
 
     setIsVideoUploading(true);
+    setUploadProgress(0);
 
     try {
-      // Create object URL instead of reading as data URL for better performance
-      const videoUrl = URL.createObjectURL(file);
+      // 📁 Step 1: Generate unique filename
+      const timestamp = Date.now();
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `videos/${unit.id}/${timestamp}_${cleanFileName}`;
       
+      console.log('🚀 Uploading to Supabase Storage:', fileName);
+      setUploadProgress(10);
+
+      // 📤 Step 2: Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('learning-units')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('❌ Supabase upload failed:', uploadError);
+        throw new Error(`Upload fehlgeschlagen: ${uploadError.message}`);
+      }
+
+      setUploadProgress(60);
+      console.log('✅ File uploaded to Supabase:', uploadData.path);
+
+      // 🔗 Step 3: Get public URL
+      const { data: urlData } = supabase.storage
+        .from('learning-units')
+        .getPublicUrl(fileName);
+
+      if (!urlData.publicUrl) {
+        throw new Error('Keine öffentliche URL erhalten');
+      }
+
+      setUploadProgress(80);
+      console.log('🔗 Public URL generated:', urlData.publicUrl);
+
+      // 💾 Step 4: Create video metadata (NO BASE64!)
       const videoData = {
         id: unit.video?.id || Date.now().toString(),
         name: file.name,
         size: file.size,
         type: file.type,
-        url: videoUrl,
+        storagePath: fileName,
+        publicUrl: urlData.publicUrl,
         uploadedAt: new Date().toISOString(),
         comments: unit.video?.comments || []
       };
 
-      updateLearningUnit(unit.id, { video: videoData });
-      setIsVideoUploading(false);
+      setUploadProgress(90);
+
+      // 💾 Step 5: Update learning unit (LIGHTWEIGHT - no file data!)
+      await updateLearningUnit(unit.id, { video: videoData });
+
+      setUploadProgress(100);
+      
+      console.log('✅ Video uploaded successfully - NO localStorage overflow!');
+      
+      // Success feedback
+      setTimeout(() => {
+        setIsVideoUploading(false);
+        setUploadProgress(0);
+      }, 1000);
+
     } catch (error) {
-      console.error('Error uploading video:', error);
-      alert('Fehler beim Upload der Videodatei.');
+      console.error('❌ Error uploading video:', error);
+      
+      // Show specific error to user
+      let errorMessage = 'Unbekannter Fehler beim Upload';
+      if (error.message.includes('quota')) {
+        errorMessage = 'Speicherplatz erschöpft. Bitte Administrator kontaktieren.';
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = 'Netzwerkfehler. Bitte Internetverbindung prüfen.';
+      } else {
+        errorMessage = error.message;
+      }
+      
+      alert(`Fehler beim Upload: ${errorMessage}`);
       setIsVideoUploading(false);
+      setUploadProgress(0);
     }
 
     // Reset input
@@ -58,60 +121,89 @@ const VideoTab = ({ unit }) => {
     }
   };
 
-  const handleVideoRemove = () => {
+  const handleVideoRemove = async () => {
     if (window.confirm('Möchten Sie das Video wirklich entfernen?')) {
-      // Revoke object URL to free memory
-      if (unit.video && unit.video.url) {
-        URL.revokeObjectURL(unit.video.url);
+      try {
+        // 🗑️ Step 1: Delete from Supabase Storage
+        if (unit.video?.storagePath) {
+          console.log('🗑️ Deleting from Supabase Storage:', unit.video.storagePath);
+          
+          const { error: deleteError } = await supabase.storage
+            .from('learning-units')
+            .remove([unit.video.storagePath]);
+
+          if (deleteError) {
+            console.warn('⚠️ Could not delete from storage:', deleteError);
+            // Continue anyway - metadata cleanup is more important
+          } else {
+            console.log('✅ File deleted from Supabase Storage');
+          }
+        }
+
+        // 🗑️ Step 2: Remove video metadata
+        await updateLearningUnit(unit.id, { video: null });
+        console.log('✅ Video completely removed');
+        
+      } catch (error) {
+        console.error('❌ Error removing video:', error);
+        alert('Fehler beim Entfernen des Videos: ' + error.message);
       }
-      updateLearningUnit(unit.id, { video: null });
     }
   };
 
   const handleVideoDownload = () => {
-    if (unit.video) {
-      try {
-        const link = document.createElement('a');
-        link.href = unit.video.url;
-        link.download = unit.video.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } catch (error) {
-        console.error('Error downloading video:', error);
-        alert('Fehler beim Download der Videodatei.');
-      }
+    if (unit.video?.publicUrl) {
+      // Direct download from Supabase
+      const link = document.createElement('a');
+      link.href = unit.video.publicUrl;
+      link.download = unit.video.name;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert('Video-URL nicht verfügbar.');
     }
   };
 
   // Comment Management for Video
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newComment.trim()) return;
 
-    const newCommentObj = {
-      id: Date.now().toString(),
-      content: newComment.trim(),
-      author: currentUser,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const newCommentObj = {
+        id: Date.now().toString(),
+        content: newComment.trim(),
+        author: currentUser,
+        createdAt: new Date().toISOString()
+      };
 
-    const updatedVideo = {
-      ...unit.video,
-      comments: [newCommentObj, ...(unit.video.comments || [])] // Add to beginning for newest first
-    };
-
-    updateLearningUnit(unit.id, { video: updatedVideo });
-    setNewComment('');
-  };
-
-  const handleDeleteComment = (commentId) => {
-    if (window.confirm('Möchten Sie diesen Kommentar wirklich löschen?')) {
-      const updatedComments = unit.video.comments.filter(comment => comment.id !== commentId);
       const updatedVideo = {
         ...unit.video,
-        comments: updatedComments
+        comments: [newCommentObj, ...(unit.video.comments || [])]
       };
-      updateLearningUnit(unit.id, { video: updatedVideo });
+
+      await updateLearningUnit(unit.id, { video: updatedVideo });
+      setNewComment('');
+    } catch (error) {
+      console.error('❌ Error adding comment:', error);
+      alert('Fehler beim Hinzufügen des Kommentars');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (window.confirm('Möchten Sie diesen Kommentar wirklich löschen?')) {
+      try {
+        const updatedComments = unit.video.comments.filter(comment => comment.id !== commentId);
+        const updatedVideo = {
+          ...unit.video,
+          comments: updatedComments
+        };
+        await updateLearningUnit(unit.id, { video: updatedVideo });
+      } catch (error) {
+        console.error('❌ Error deleting comment:', error);
+        alert('Fehler beim Löschen des Kommentars');
+      }
     }
   };
 
@@ -135,15 +227,34 @@ const VideoTab = ({ unit }) => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Video</h3>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Laden Sie hier das Hauptvideo für diese Lerneinheit hoch. Das Video kann von Lernenden angeschaut und kommentiert werden.
+            Laden Sie hier das Hauptvideo für diese Lerneinheit hoch. Das Video wird in Supabase Storage gespeichert (bis 500MB).
           </p>
         </div>
 
         <div className="p-6">
+          {/* Upload Progress */}
           {isVideoUploading && (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">Video wird hochgeladen...</p>
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  Video wird hochgeladen...
+                </span>
+                <span className="text-sm text-blue-600 dark:text-blue-400">
+                  {uploadProgress}%
+                </span>
+              </div>
+              <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-3">
+                <div
+                  className="bg-blue-600 dark:bg-blue-400 h-3 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                {uploadProgress < 20 && 'Datei wird vorbereitet...'}
+                {uploadProgress >= 20 && uploadProgress < 70 && 'Upload zu Supabase Storage...'}
+                {uploadProgress >= 70 && uploadProgress < 95 && 'URL wird generiert...'}
+                {uploadProgress >= 95 && 'Metadaten werden gespeichert...'}
+              </p>
             </div>
           )}
 
@@ -159,6 +270,10 @@ const VideoTab = ({ unit }) => {
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         {(unit.video.size / 1024 / 1024).toFixed(2)} MB • Hochgeladen am {new Date(unit.video.uploadedAt).toLocaleDateString('de-DE')}
                       </p>
+                      <div className="flex items-center mt-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                        <span className="text-xs text-green-600 dark:text-green-400">Supabase Storage</span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex space-x-2">
@@ -182,14 +297,16 @@ const VideoTab = ({ unit }) => {
 
               {/* Video Player */}
               <div className="bg-black rounded-lg overflow-hidden">
-                <video 
-                  controls 
+                <video
+                  controls
                   className="w-full max-h-96"
-                  src={unit.video.url}
+                  src={unit.video.publicUrl}
                   onError={(e) => {
                     console.error('Video playback error:', e);
+                    console.log('Trying to load video from:', unit.video.publicUrl);
                   }}
                 >
+                  <source src={unit.video.publicUrl} type={unit.video.type} />
                   Ihr Browser unterstützt keine Videowiedergabe.
                 </video>
               </div>
@@ -206,7 +323,7 @@ const VideoTab = ({ unit }) => {
                 Video hochladen
               </button>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Maximale Dateigröße: 500MB
+                Maximale Dateigröße: 500MB • Wird in Supabase Storage gespeichert
               </p>
             </div>
           ) : null}
@@ -241,11 +358,7 @@ const VideoTab = ({ unit }) => {
             <div className="mb-6">
               <div className="flex space-x-3">
                 <div className="flex-shrink-0">
-                  <img
-                    src={currentUser.avatar}
-                    alt={currentUser.name}
-                    className="w-8 h-8 rounded-full"
-                  />
+                  <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full" />
                 </div>
                 <div className="flex-1">
                   <textarea
@@ -275,11 +388,7 @@ const VideoTab = ({ unit }) => {
                 {unit.video.comments.map((comment) => (
                   <div key={comment.id} className="flex space-x-3">
                     <div className="flex-shrink-0">
-                      <img
-                        src={comment.author.avatar}
-                        alt={comment.author.name}
-                        className="w-8 h-8 rounded-full"
-                      />
+                      <img src={comment.author.avatar} alt={comment.author.name} className="w-8 h-8 rounded-full" />
                     </div>
                     <div className="flex-1">
                       <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">

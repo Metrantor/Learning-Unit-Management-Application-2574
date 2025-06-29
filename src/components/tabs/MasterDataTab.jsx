@@ -3,6 +3,7 @@ import { useLearningUnits, EDITORIAL_STATES } from '../../context/LearningUnitCo
 import { v4 as uuidv4 } from 'uuid';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
+import supabase from '../../lib/supabase';
 
 const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen, FiCalendar, FiClock } = FiIcons;
 
@@ -15,6 +16,7 @@ const MasterDataTab = ({ unit }) => {
   const [showUrlDialog, setShowUrlDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [pendingImageData, setPendingImageData] = useState(null);
+  const [isImageUploading, setIsImageUploading] = useState(false);
   const fileInputRef = useRef(null);
   const xmlImportInputRef = useRef(null);
 
@@ -24,6 +26,205 @@ const MasterDataTab = ({ unit }) => {
 
   const handleBasicInfoChange = (field, value) => {
     handleUpdate({ [field]: value });
+  };
+
+  // Helper function to generate unique filename with sequential numbering
+  const generateUniqueFilename = (originalName = '') => {
+    const topic = unit.topicId ? getTopic(unit.topicId) : null;
+    const topicName = topic?.title || '';
+    const unitName = unit.title || '';
+
+    // Create abbreviated versions
+    const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
+    const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
+
+    // Get current image count for sequential numbering
+    const currentImageCount = (unit.images || []).length + 1;
+    const sequentialNumber = String(currentImageCount).padStart(3, '0'); // 001, 002, etc.
+
+    // Generate timestamp with seconds
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0]; // YYYYMMDD_HHMMSS
+
+    // Use original name if provided, otherwise use generic name
+    const baseName = originalName.replace(/\.[^/.]+$/, "") || 'Bild';
+
+    // Construct unique filename
+    let filename = '';
+    if (topicAbbr && unitAbbr) {
+      filename = `${topicAbbr}_${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
+    } else if (unitAbbr) {
+      filename = `${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
+    } else {
+      filename = `${sequentialNumber}_${baseName}_${timestamp}`;
+    }
+
+    return filename;
+  };
+
+  // 🚀 FIXED: Real Supabase Storage Upload for Images
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    
+    files.forEach(async (file) => {
+      if (file.type.startsWith('image/')) {
+        // Show name dialog first
+        setPendingImageData({ file });
+        setImageName(generateUniqueFilename(file.name));
+        setShowImageNameDialog(true);
+      } else {
+        alert('Bitte wählen Sie nur Bilddateien aus.');
+      }
+    });
+  };
+
+  const confirmImageUpload = async () => {
+    if (!pendingImageData || !imageName.trim()) return;
+
+    setIsImageUploading(true);
+    
+    try {
+      const file = pendingImageData.file;
+      
+      // 📁 Generate unique storage path
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop();
+      const storagePath = `images/${unit.id}/${timestamp}_${imageName.trim()}.${fileExtension}`;
+      
+      console.log('🚀 Uploading image to Supabase Storage:', storagePath);
+
+      // 📤 Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('learning-units')
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('❌ Supabase image upload failed:', uploadError);
+        throw new Error(`Upload fehlgeschlagen: ${uploadError.message}`);
+      }
+
+      console.log('✅ Image uploaded to Supabase:', uploadData.path);
+
+      // 🔗 Get public URL
+      const { data: urlData } = supabase.storage
+        .from('learning-units')
+        .getPublicUrl(storagePath);
+
+      if (!urlData.publicUrl) {
+        throw new Error('Keine öffentliche URL erhalten');
+      }
+
+      console.log('🔗 Image public URL generated:', urlData.publicUrl);
+
+      // 💾 Create image metadata (NO BASE64!)
+      const newImage = {
+        id: uuidv4(),
+        name: imageName.trim(),
+        size: file.size,
+        type: file.type,
+        storagePath: storagePath,
+        url: urlData.publicUrl, // For backward compatibility
+        publicUrl: urlData.publicUrl,
+        uploadedAt: new Date().toISOString(),
+        context: 'masterdata'
+      };
+
+      const updatedImages = [...(unit.images || []), newImage];
+      await updateLearningUnit(unit.id, { images: updatedImages });
+
+      console.log('✅ Image uploaded successfully - NO localStorage overflow!');
+      
+    } catch (error) {
+      console.error('❌ Error uploading image:', error);
+      alert('Fehler beim Upload: ' + error.message);
+    } finally {
+      setIsImageUploading(false);
+      setShowImageNameDialog(false);
+      setPendingImageData(null);
+      setImageName('');
+    }
+  };
+
+  const handleClipboardPaste = async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const clipboardItem of clipboardItems) {
+        for (const type of clipboardItem.types) {
+          if (type.startsWith('image/')) {
+            const blob = await clipboardItem.getType(type);
+            setPendingImageData({ file: blob });
+            setImageName(generateUniqueFilename('Zwischenablage'));
+            setShowImageNameDialog(true);
+            return;
+          }
+        }
+      }
+      alert('Kein Bild in der Zwischenablage gefunden.');
+    } catch (error) {
+      console.error('Fehler beim Zugriff auf die Zwischenablage:', error);
+      alert('Fehler beim Zugriff auf die Zwischenablage.');
+    }
+  };
+
+  const handleImageRemove = async (imageId) => {
+    if (window.confirm('Möchten Sie dieses Bild wirklich entfernen?')) {
+      const imageToDelete = unit.images.find(img => img.id === imageId);
+      
+      try {
+        // 🗑️ Delete from Supabase Storage if it exists
+        if (imageToDelete?.storagePath) {
+          console.log('🗑️ Deleting image from Supabase Storage:', imageToDelete.storagePath);
+          
+          const { error: deleteError } = await supabase.storage
+            .from('learning-units')
+            .remove([imageToDelete.storagePath]);
+
+          if (deleteError) {
+            console.warn('⚠️ Could not delete from storage:', deleteError);
+            // Continue anyway - metadata cleanup is more important
+          } else {
+            console.log('✅ Image deleted from Supabase Storage');
+          }
+        }
+
+        // 🗑️ Remove from unit metadata
+        const updatedImages = unit.images.filter(img => img.id !== imageId);
+        await updateLearningUnit(unit.id, { images: updatedImages });
+        
+      } catch (error) {
+        console.error('❌ Error removing image:', error);
+        alert('Fehler beim Entfernen des Bildes: ' + error.message);
+      }
+    }
+  };
+
+  const handleImageCopy = async (imageUrl) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob })
+      ]);
+      alert('Bild in Zwischenablage kopiert.');
+    } catch (error) {
+      console.error('Fehler beim Kopieren:', error);
+      alert('Fehler beim Kopieren des Bildes.');
+    }
+  };
+
+  const handleImageOpen = (imageUrl, imageName) => {
+    const newWindow = window.open();
+    newWindow.document.write(`
+      <html>
+        <head><title>${imageName}</title></head>
+        <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f3f4f6;">
+          <img src="${imageUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="${imageName}" />
+        </body>
+      </html>
+    `);
   };
 
   // XML Export Function - Enhanced to include comments
@@ -54,7 +255,6 @@ const MasterDataTab = ({ unit }) => {
       };
 
       const xmlContent = createXmlFromData(xmlData);
-      
       const blob = new Blob([xmlContent], { type: 'application/xml' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -114,6 +314,7 @@ const MasterDataTab = ({ unit }) => {
         alert('Fehler beim XML-Import: ' + error.message);
       }
     };
+
     reader.readAsText(file);
     event.target.value = '';
   };
@@ -305,6 +506,7 @@ const MasterDataTab = ({ unit }) => {
   // Learning Goals Management
   const addGoal = () => {
     if (!newGoal.trim()) return;
+
     const updatedGoals = [
       ...unit.learningGoals,
       {
@@ -325,6 +527,7 @@ const MasterDataTab = ({ unit }) => {
   // URL Management
   const addUrl = () => {
     if (!newUrl.title.trim() || !newUrl.url.trim()) return;
+
     const updatedUrls = [
       ...(unit.urls || []),
       {
@@ -389,137 +592,6 @@ const MasterDataTab = ({ unit }) => {
     if (window.confirm('Möchten Sie die PowerPoint-Datei wirklich entfernen?')) {
       handleUpdate({ powerPointFile: null });
     }
-  };
-
-  // Helper function to generate unique filename with sequential numbering
-  const generateUniqueFilename = (originalName = '') => {
-    const topic = unit.topicId ? getTopic(unit.topicId) : null;
-    const topicName = topic?.title || '';
-    const unitName = unit.title || '';
-
-    // Create abbreviated versions
-    const topicAbbr = topicName.split(' ').map(word => word.charAt(0)).join('').toUpperCase();
-    const unitAbbr = unitName.split(' ').slice(0, 3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
-
-    // Get current image count for sequential numbering
-    const currentImageCount = (unit.images || []).length + 1;
-    const sequentialNumber = String(currentImageCount).padStart(3, '0'); // 001, 002, etc.
-
-    // Generate timestamp with seconds
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0]; // YYYYMMDD_HHMMSS
-
-    // Use original name if provided, otherwise use generic name
-    const baseName = originalName.replace(/\.[^/.]+$/, "") || 'Bild';
-
-    // Construct unique filename
-    let filename = '';
-    if (topicAbbr && unitAbbr) {
-      filename = `${topicAbbr}_${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
-    } else if (unitAbbr) {
-      filename = `${unitAbbr}_${sequentialNumber}_${baseName}_${timestamp}`;
-    } else {
-      filename = `${sequentialNumber}_${baseName}_${timestamp}`;
-    }
-
-    return filename;
-  };
-
-  // Image Management - Enhanced with unique naming
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    files.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const imageData = { file, url: event.target.result };
-          setPendingImageData(imageData);
-          setImageName(generateUniqueFilename(file.name));
-          setShowImageNameDialog(true);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        alert('Bitte wählen Sie nur Bilddateien aus.');
-      }
-    });
-  };
-
-  const confirmImageUpload = () => {
-    if (pendingImageData && imageName.trim()) {
-      const newImage = {
-        id: uuidv4(),
-        name: imageName.trim(),
-        size: pendingImageData.file.size,
-        type: pendingImageData.file.type,
-        url: pendingImageData.url,
-        uploadedAt: new Date().toISOString()
-      };
-
-      const updatedImages = [...(unit.images || []), newImage];
-      handleUpdate({ images: updatedImages });
-
-      setShowImageNameDialog(false);
-      setPendingImageData(null);
-      setImageName('');
-    }
-  };
-
-  const handleClipboardPaste = async () => {
-    try {
-      const clipboardItems = await navigator.clipboard.read();
-      for (const clipboardItem of clipboardItems) {
-        for (const type of clipboardItem.types) {
-          if (type.startsWith('image/')) {
-            const blob = await clipboardItem.getType(type);
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              setPendingImageData({ file: blob, url: event.target.result });
-              setImageName(generateUniqueFilename('Zwischenablage'));
-              setShowImageNameDialog(true);
-            };
-            reader.readAsDataURL(blob);
-            return;
-          }
-        }
-      }
-      alert('Kein Bild in der Zwischenablage gefunden.');
-    } catch (error) {
-      console.error('Fehler beim Zugriff auf die Zwischenablage:', error);
-      alert('Fehler beim Zugriff auf die Zwischenablage.');
-    }
-  };
-
-  const handleImageRemove = (imageId) => {
-    if (window.confirm('Möchten Sie dieses Bild wirklich entfernen?')) {
-      const updatedImages = unit.images.filter(img => img.id !== imageId);
-      handleUpdate({ images: updatedImages });
-    }
-  };
-
-  const handleImageCopy = async (imageUrl) => {
-    try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob })
-      ]);
-      alert('Bild in Zwischenablage kopiert.');
-    } catch (error) {
-      console.error('Fehler beim Kopieren:', error);
-      alert('Fehler beim Kopieren des Bildes.');
-    }
-  };
-
-  const handleImageOpen = (imageUrl, imageName) => {
-    const newWindow = window.open();
-    newWindow.document.write(`
-      <html>
-        <head><title>${imageName}</title></head>
-        <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f3f4f6;">
-          <img src="${imageUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="${imageName}" />
-        </body>
-      </html>
-    `);
   };
 
   return (
@@ -681,9 +753,9 @@ const MasterDataTab = ({ unit }) => {
               />
               {unit.targetDate && (
                 <div className="flex items-center">
-                  <SafeIcon 
-                    icon={isTargetDateOverdue() ? FiClock : FiCalendar} 
-                    className={`h-4 w-4 mr-1 ${isTargetDateOverdue() ? 'text-red-500' : 'text-green-500'}`} 
+                  <SafeIcon
+                    icon={isTargetDateOverdue() ? FiClock : FiCalendar}
+                    className={`h-4 w-4 mr-1 ${isTargetDateOverdue() ? 'text-red-500' : 'text-green-500'}`}
                   />
                   <span className={`text-xs ${isTargetDateOverdue() ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                     {isTargetDateOverdue() ? 'Überfällig' : 'Zieldatum gesetzt'}
@@ -736,7 +808,10 @@ const MasterDataTab = ({ unit }) => {
           {unit.learningGoals.length > 0 && (
             <div className="space-y-2">
               {unit.learningGoals.map((goal, index) => (
-                <div key={goal.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div
+                  key={goal.id}
+                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                >
                   <div className="flex items-start">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400 mr-3 mt-0.5">
                       {index + 1}.
@@ -887,6 +962,7 @@ const MasterDataTab = ({ unit }) => {
             </button>
           </div>
         )}
+
         <input
           ref={fileInputRef}
           type="file"
@@ -919,9 +995,10 @@ const MasterDataTab = ({ unit }) => {
             <button
               onClick={() => document.getElementById('imageUpload').click()}
               className="inline-flex items-center px-3 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors text-sm"
+              disabled={isImageUploading}
             >
               <SafeIcon icon={FiUpload} className="h-4 w-4 mr-2" />
-              Bilder hochladen
+              {isImageUploading ? 'Uploading...' : 'Bilder hochladen'}
             </button>
           </div>
         </div>
@@ -932,7 +1009,7 @@ const MasterDataTab = ({ unit }) => {
               <div key={image.id} className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-700">
                 <div className="aspect-video bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                   <img
-                    src={image.url}
+                    src={image.url || image.publicUrl}
                     alt={image.name}
                     className="max-w-full max-h-full object-contain"
                     onError={(e) => {
@@ -950,14 +1027,14 @@ const MasterDataTab = ({ unit }) => {
                   </p>
                   <div className="flex justify-between">
                     <button
-                      onClick={() => handleImageOpen(image.url, image.name)}
+                      onClick={() => handleImageOpen(image.url || image.publicUrl, image.name)}
                       className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors"
                       title="Öffnen"
                     >
                       <SafeIcon icon={FiEye} className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleImageCopy(image.url)}
+                      onClick={() => handleImageCopy(image.url || image.publicUrl)}
                       className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900 rounded transition-colors"
                       title="In Zwischenablage kopieren"
                     >
@@ -979,8 +1056,12 @@ const MasterDataTab = ({ unit }) => {
           <div className="text-center py-8">
             <SafeIcon icon={FiImage} className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">Keine Bilder hochgeladen</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Bilder werden in Supabase Storage gespeichert und sind dauerhaft verfügbar.
+            </p>
           </div>
         )}
+
         <input
           id="imageUpload"
           type="file"
@@ -1047,11 +1128,9 @@ const MasterDataTab = ({ unit }) => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Bildname festlegen</h3>
             {pendingImageData && (
               <div className="mb-4">
-                <img
-                  src={pendingImageData.url}
-                  alt="Vorschau"
-                  className="w-full h-32 object-cover rounded border"
-                />
+                <div className="w-full h-32 bg-gray-200 dark:bg-gray-600 rounded border flex items-center justify-center">
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">Bild-Vorschau</span>
+                </div>
               </div>
             )}
             <input
@@ -1074,10 +1153,10 @@ const MasterDataTab = ({ unit }) => {
               </button>
               <button
                 onClick={confirmImageUpload}
-                disabled={!imageName.trim()}
+                disabled={!imageName.trim() || isImageUploading}
                 className="px-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Speichern
+                {isImageUploading ? 'Uploading...' : 'Speichern'}
               </button>
             </div>
           </div>

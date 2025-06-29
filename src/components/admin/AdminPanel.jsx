@@ -7,22 +7,11 @@ import * as FiIcons from 'react-icons/fi';
 const { FiUsers, FiKey, FiPlus, FiTrash2, FiMail, FiShield, FiClock, FiCheck, FiX, FiRefreshCw, FiEdit2, FiToggleLeft, FiToggleRight } = FiIcons;
 
 const AdminPanel = () => {
-  const { 
-    invitationCodes, 
-    users, 
-    createInvitationCode, 
-    deleteInvitationCode, 
-    toggleInvitationCode,
-    updateInvitationCode,
-    updateUserRole, 
-    deleteUser,
-    resetAuth 
-  } = useAuth();
-  
-  const [newInvitation, setNewInvitation] = useState({ 
-    email: '', 
-    role: 'user', 
-    description: '' 
+  const { invitationCodes, users, createInvitationCode, deleteInvitationCode, toggleInvitationCode, updateInvitationCode, updateUserRole, deleteUser, resetAuth } = useAuth();
+  const [newInvitation, setNewInvitation] = useState({
+    email: '',
+    role: 'user',
+    description: ''
   });
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState('invitations');
@@ -31,7 +20,7 @@ const AdminPanel = () => {
   const handleCreateInvitation = (e) => {
     e.preventDefault();
     if (!newInvitation.email.trim()) return;
-    
+
     createInvitationCode(newInvitation.email, newInvitation.role, newInvitation.description);
     setNewInvitation({ email: '', role: 'user', description: '' });
     setShowCreateForm(false);
@@ -47,9 +36,21 @@ const AdminPanel = () => {
   };
 
   const getRoleColor = (role) => {
-    return role === 'admin' 
+    return role === 'admin'
       ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
       : 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
+  };
+
+  // 🔥 FIX: Toggle function for invitation codes
+  const handleToggleCode = async (codeId) => {
+    try {
+      console.log('🔄 Toggling invitation code:', codeId);
+      await toggleInvitationCode(codeId);
+      console.log('✅ Toggle successful');
+    } catch (error) {
+      console.error('❌ Toggle failed:', error);
+      alert('Fehler beim Umschalten des Status');
+    }
   };
 
   return (
@@ -59,7 +60,7 @@ const AdminPanel = () => {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Benutzerverwaltung</h2>
           <p className="text-gray-600 dark:text-gray-400">Verwalten Sie Benutzer und Einladungscodes (Passwörter)</p>
         </div>
-        
+
         {/* Debug Reset Button */}
         <button
           onClick={() => {
@@ -203,13 +204,28 @@ const AdminPanel = () => {
             ) : (
               <div className="space-y-3">
                 {invitationCodes.map((invitation) => (
-                  <div key={invitation.id} className={`p-4 rounded-lg border ${invitation.isActive ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
+                  <div
+                    key={invitation.id}
+                    className={`p-4 rounded-lg border ${
+                      invitation.is_active
+                        ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-700'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                    }`}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4 flex-1">
-                        <div className={`p-2 rounded-full ${invitation.isActive ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-600'}`}>
-                          <SafeIcon 
-                            icon={invitation.isActive ? FiKey : FiX} 
-                            className={`h-4 w-4 ${invitation.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`} 
+                        <div className={`p-2 rounded-full ${
+                          invitation.is_active
+                            ? 'bg-green-100 dark:bg-green-800'
+                            : 'bg-gray-100 dark:bg-gray-600'
+                        }`}>
+                          <SafeIcon
+                            icon={invitation.is_active ? FiKey : FiX}
+                            className={`h-4 w-4 ${
+                              invitation.is_active
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}
                           />
                         </div>
                         <div className="flex-1">
@@ -219,11 +235,11 @@ const AdminPanel = () => {
                               {invitation.role === 'admin' ? 'Administrator' : 'Benutzer'}
                             </span>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              invitation.isActive 
-                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' 
+                              invitation.is_active
+                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                                 : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
                             }`}>
-                              {invitation.isActive ? 'Aktiv' : 'Deaktiviert'}
+                              {invitation.is_active ? 'Aktiv' : 'Deaktiviert'}
                             </span>
                           </div>
                           <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
@@ -235,22 +251,25 @@ const AdminPanel = () => {
                             </p>
                           )}
                           <p className="text-xs text-gray-400 dark:text-gray-500">
-                            Erstellt: {formatDate(invitation.createdAt)}
+                            Erstellt: {formatDate(invitation.created_at)}
                           </p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center space-x-2">
+                        {/* 🔥 FIXED TOGGLE BUTTON */}
                         <button
-                          onClick={() => toggleInvitationCode(invitation.id)}
+                          onClick={() => handleToggleCode(invitation.id)}
                           className={`p-2 rounded transition-colors ${
-                            invitation.isActive 
-                              ? 'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800' 
+                            invitation.is_active
+                              ? 'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800'
                               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600'
                           }`}
-                          title={invitation.isActive ? 'Deaktivieren' : 'Aktivieren'}
+                          title={invitation.is_active ? 'Deaktivieren' : 'Aktivieren'}
                         >
-                          <SafeIcon icon={invitation.isActive ? FiToggleRight : FiToggleLeft} className="h-4 w-4" />
+                          <SafeIcon
+                            icon={invitation.is_active ? FiToggleRight : FiToggleLeft}
+                            className="h-4 w-4"
+                          />
                         </button>
                         <button
                           onClick={() => {
@@ -278,7 +297,7 @@ const AdminPanel = () => {
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Registrierte Benutzer</h3>
-            
+
             {users.length === 0 ? (
               <p className="text-gray-500 dark:text-gray-400 text-center py-8">
                 Noch keine Benutzer registriert.
@@ -292,13 +311,13 @@ const AdminPanel = () => {
                       <div>
                         <h4 className="font-medium text-gray-900 dark:text-white">{user.name}</h4>
                         <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                        {user.invitationCode && (
+                        {user.invitation_code && (
                           <p className="text-xs text-gray-400 dark:text-gray-500">
-                            Code: <span className="font-mono">{user.invitationCode}</span>
+                            Code: <span className="font-mono">{user.invitation_code}</span>
                           </p>
                         )}
                         <p className="text-xs text-gray-400 dark:text-gray-500">
-                          Registriert: {formatDate(user.createdAt)}
+                          Registriert: {formatDate(user.created_at)}
                         </p>
                       </div>
                     </div>

@@ -18,14 +18,32 @@ const CreateLearningUnit = () => {
     targetDate: ''
   });
   const [showXmlImport, setShowXmlImport] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const xmlImportInputRef = useRef(null);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    const newUnit = createLearningUnit(formData);
-    navigate(`/unit/${newUnit.id}`);
+    setIsLoading(true);
+    try {
+      console.log('🆕 Creating learning unit with data:', formData);
+      const newUnit = await createLearningUnit(formData);
+      console.log('✅ Learning unit created:', newUnit);
+      
+      if (newUnit && newUnit.id) {
+        console.log('🔄 Navigating to learning unit:', newUnit.id);
+        navigate(`/unit/${newUnit.id}`);
+      } else {
+        console.error('❌ No ID returned from createLearningUnit');
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('❌ Error creating learning unit:', error);
+      alert('Fehler beim Erstellen der Lerneinheit: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -45,7 +63,8 @@ const CreateLearningUnit = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
+      setIsLoading(true);
       try {
         const xmlContent = e.target.result;
         const importedData = parseXmlToData(xmlContent);
@@ -58,7 +77,7 @@ const CreateLearningUnit = () => {
         }));
 
         // Create unit with imported data
-        const newUnit = createLearningUnit({
+        console.log('🆕 Creating learning unit from XML with data:', {
           ...formData,
           title: importedData.title || formData.title,
           description: importedData.description || formData.description,
@@ -73,11 +92,35 @@ const CreateLearningUnit = () => {
           speechTextComments: importedData.speechTextComments || []
         });
 
-        navigate(`/unit/${newUnit.id}`);
-        alert('XML-Import erfolgreich abgeschlossen!');
+        const newUnit = await createLearningUnit({
+          ...formData,
+          title: importedData.title || formData.title,
+          description: importedData.description || formData.description,
+          learningGoals: importedData.learningGoals || [],
+          notes: importedData.notes || '',
+          speechText: importedData.speechText || '',
+          explanation: importedData.explanation || '',
+          urls: importedData.urls || [],
+          textSnippets: importedData.textSnippets || [],
+          comments: importedData.comments || [],
+          explanationComments: importedData.explanationComments || [],
+          speechTextComments: importedData.speechTextComments || []
+        });
+
+        console.log('✅ Learning unit created from XML:', newUnit);
+        
+        if (newUnit && newUnit.id) {
+          navigate(`/unit/${newUnit.id}`);
+          alert('XML-Import erfolgreich abgeschlossen!');
+        } else {
+          console.error('❌ No ID returned from createLearningUnit');
+          navigate('/');
+        }
       } catch (error) {
         console.error('Fehler beim XML-Import:', error);
         alert('Fehler beim XML-Import: ' + error.message);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -89,7 +132,7 @@ const CreateLearningUnit = () => {
   const parseXmlToData = (xmlContent) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-    
+
     const parseError = xmlDoc.querySelector('parsererror');
     if (parseError) {
       throw new Error('Ungültiges XML-Format');
@@ -205,7 +248,8 @@ const CreateLearningUnit = () => {
             <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">XML-Import</h3>
             <button
               onClick={() => xmlImportInputRef.current?.click()}
-              className="inline-flex items-center px-3 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm"
+              disabled={isLoading}
+              className="inline-flex items-center px-3 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm disabled:opacity-50"
             >
               <SafeIcon icon={FiUpload} className="h-4 w-4 mr-2" />
               XML importieren
@@ -235,7 +279,8 @@ const CreateLearningUnit = () => {
               value={formData.title}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               placeholder="Geben Sie einen aussagekräftigen Titel ein..."
             />
           </div>
@@ -250,7 +295,8 @@ const CreateLearningUnit = () => {
               value={formData.description}
               onChange={handleChange}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               placeholder="Beschreiben Sie kurz den Inhalt der Lerneinheit..."
             />
           </div>
@@ -265,7 +311,8 @@ const CreateLearningUnit = () => {
               name="targetDate"
               value={formData.targetDate}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Das Zieldatum wird rot angezeigt, wenn die Lerneinheit bis dahin nicht fertiggestellt ist.
@@ -276,17 +323,18 @@ const CreateLearningUnit = () => {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors disabled:opacity-50"
             >
               Abbrechen
             </button>
             <button
               type="submit"
-              disabled={!formData.title.trim()}
+              disabled={!formData.title.trim() || isLoading}
               className="inline-flex items-center px-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <SafeIcon icon={FiSave} className="h-4 w-4 mr-2" />
-              Erstellen
+              {isLoading ? 'Erstelle...' : 'Erstellen'}
             </button>
           </div>
         </form>

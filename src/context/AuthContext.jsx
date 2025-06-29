@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
 
   // Load data from Supabase on mount
   useEffect(() => {
-    console.log('🚀 AuthProvider initializing with Supabase...');
+    console.log('🚀 AuthProvider initializing...');
     loadInitialData();
   }, []);
 
@@ -41,37 +41,132 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      // Load invitation codes from Supabase
-      const { data: codes, error: codesError } = await supabase
-        .from('invitation_codes_4k9x2')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (codesError) {
-        console.error('❌ Error loading invitation codes:', codesError);
-      } else {
-        console.log('📋 Loaded invitation codes from Supabase:', codes);
-        setInvitationCodes(codes || []);
-      }
-
-      // Load users from Supabase
-      const { data: usersData, error: usersError } = await supabase
-        .from('users_auth_4k9x2')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (usersError) {
-        console.error('❌ Error loading users:', usersError);
-      } else {
-        console.log('👥 Loaded users from Supabase:', usersData);
-        setUsers(usersData || []);
-      }
-
+      // Load invitation codes
+      await loadInvitationCodes();
+      // Load users
+      await loadUsers();
     } catch (error) {
-      console.error('❌ Error loading initial data:', error);
+      console.error('❌ Error loading initial auth data:', error);
     } finally {
       setIsLoading(false);
       console.log('✅ AuthProvider initialized');
+    }
+  };
+
+  const loadInvitationCodes = async () => {
+    try {
+      console.log('🔑 Loading invitation codes...');
+      const { data, error } = await supabase
+        .from('invitation_codes_sb2024')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setInvitationCodes(data);
+        localStorage.setItem('invitationCodes_sb2024', JSON.stringify(data));
+        console.log('✅ Loaded invitation codes from Supabase:', data.length);
+
+        // Falls keine Codes da sind, erstelle Admin-Code
+        if (data.length === 0) {
+          await createDefaultAdminCode();
+        }
+      } else {
+        console.log('⚠️ Supabase error, using localStorage fallback');
+        const localCodes = JSON.parse(localStorage.getItem('invitationCodes_sb2024') || '[]');
+        setInvitationCodes(localCodes);
+        if (localCodes.length === 0) {
+          await createDefaultAdminCode();
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading invitation codes:', error);
+      const localCodes = JSON.parse(localStorage.getItem('invitationCodes_sb2024') || '[]');
+      setInvitationCodes(localCodes);
+      if (localCodes.length === 0) {
+        await createDefaultAdminCode();
+      }
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      console.log('👥 Loading users...');
+      const { data, error } = await supabase
+        .from('users_sb2024')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setUsers(data);
+        localStorage.setItem('users_sb2024', JSON.stringify(data));
+        console.log('✅ Loaded users from Supabase:', data.length);
+      } else {
+        console.log('⚠️ Supabase error, using localStorage fallback');
+        const localUsers = JSON.parse(localStorage.getItem('users_sb2024') || '[]');
+        setUsers(localUsers);
+      }
+    } catch (error) {
+      console.error('❌ Error loading users:', error);
+      const localUsers = JSON.parse(localStorage.getItem('users_sb2024') || '[]');
+      setUsers(localUsers);
+    }
+  };
+
+  // NEUE FUNKTION: Default Admin Code erstellen
+  const createDefaultAdminCode = async () => {
+    try {
+      console.log('🔧 Creating default admin code...');
+      const newCode = {
+        id: uuidv4(),
+        code: 'ADMIN2024',
+        email: 'admin@example.com',
+        role: 'admin',
+        is_active: true, // 🔥 WICHTIG: STANDARDMÄSSIG AKTIV!
+        description: 'Default Admin Code',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Try Supabase first
+      try {
+        const { data, error } = await supabase
+          .from('invitation_codes_sb2024')
+          .insert([newCode])
+          .select()
+          .single();
+
+        if (!error && data) {
+          console.log('✅ Created admin code in Supabase:', data);
+          const updatedCodes = [data, ...invitationCodes];
+          setInvitationCodes(updatedCodes);
+          localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
+          return data;
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase failed, using local storage');
+      }
+
+      // Fallback: Local storage
+      console.log('📝 Creating admin code locally');
+      const updatedCodes = [newCode, ...invitationCodes];
+      setInvitationCodes(updatedCodes);
+      localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
+      return newCode;
+    } catch (error) {
+      console.error('❌ Error creating default admin code:', error);
+      // ULTIMATE FALLBACK
+      const fallbackCode = {
+        id: 'fallback-admin',
+        code: 'ADMIN2024',
+        email: 'admin@example.com',
+        role: 'admin',
+        is_active: true, // 🔥 WICHTIG: STANDARDMÄSSIG AKTIV!
+        description: 'Fallback Admin Code',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      setInvitationCodes([fallbackCode]);
+      localStorage.setItem('invitationCodes_sb2024', JSON.stringify([fallbackCode]));
     }
   };
 
@@ -79,102 +174,81 @@ export const AuthProvider = ({ children }) => {
     console.log('🔐 Login attempt started');
     console.log('📧 Email:', email);
     console.log('🔑 Code:', code);
-    
+
     // Trim and normalize inputs
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedCode = code.trim();
-    
-    console.log('🔍 Normalized email:', normalizedEmail);
-    console.log('🔍 Normalized code:', normalizedCode);
-    
-    try {
-      // Find matching invitation code in Supabase
-      const { data: invitations, error: inviteError } = await supabase
-        .from('invitation_codes_4k9x2')
-        .select('*')
-        .eq('code', normalizedCode)
-        .eq('email', normalizedEmail)
-        .eq('is_active', true)
-        .single();
 
-      if (inviteError || !invitations) {
-        console.error('❌ No matching invitation found:', inviteError);
+    try {
+      // Find matching invitation code
+      let matchingCode = invitationCodes.find(code =>
+        code.code === normalizedCode &&
+        code.email === normalizedEmail &&
+        code.is_active === true
+      );
+
+      if (!matchingCode) {
+        console.error('❌ No matching invitation found');
         throw new Error('Ungültiger Einladungscode oder E-Mail-Adresse');
       }
 
-      console.log('🎫 Found invitation in Supabase:', invitations);
+      console.log('🎫 Found invitation:', matchingCode);
 
-      // Check if user already exists in Supabase
-      const { data: existingUsers, error: userError } = await supabase
-        .from('users_auth_4k9x2')
-        .select('*')
-        .eq('email', normalizedEmail)
-        .single();
+      // Check if user already exists
+      let currentUser = users.find(user => user.email === normalizedEmail);
 
-      let currentUser;
+      if (!currentUser) {
+        // Create new user
+        console.log('✨ Creating new user');
+        const newUserData = {
+          id: uuidv4(),
+          email: normalizedEmail,
+          name: normalizedEmail.split('@')[0],
+          role: matchingCode.role,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
+          invitation_code: matchingCode.code,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
-      if (existingUsers && !userError) {
-        // User exists, update role if needed
-        console.log('👤 Existing user login:', existingUsers.email);
-        
-        if (existingUsers.role !== invitations.role) {
-          const { data: updatedUser, error: updateError } = await supabase
-            .from('users_auth_4k9x2')
-            .update({ 
-              role: invitations.role,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingUsers.id)
+        // Try Supabase first
+        try {
+          const { data, error } = await supabase
+            .from('users_sb2024')
+            .insert([newUserData])
             .select()
             .single();
 
-          if (updateError) {
-            console.error('❌ Error updating user role:', updateError);
-            currentUser = existingUsers;
-          } else {
-            currentUser = updatedUser;
+          if (!error && data) {
+            console.log('✅ Created user in Supabase:', data);
+            currentUser = data;
+            const updatedUsers = [data, ...users];
+            setUsers(updatedUsers);
+            localStorage.setItem('users_sb2024', JSON.stringify(updatedUsers));
           }
-        } else {
-          currentUser = existingUsers;
+        } catch (supabaseError) {
+          console.log('⚠️ Supabase failed, using local storage');
+        }
+
+        if (!currentUser) {
+          // Fallback: Local storage
+          console.log('📝 Creating user locally');
+          currentUser = newUserData;
+          const updatedUsers = [newUserData, ...users];
+          setUsers(updatedUsers);
+          localStorage.setItem('users_sb2024', JSON.stringify(updatedUsers));
         }
       } else {
-        // Create new user in Supabase
-        console.log('✨ Creating new user in Supabase');
-        
-        const newUserData = {
-          email: normalizedEmail,
-          name: normalizedEmail.split('@')[0],
-          role: invitations.role,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
-          invitation_code: invitations.code
-        };
-
-        const { data: newUser, error: createError } = await supabase
-          .from('users_auth_4k9x2')
-          .insert([newUserData])
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('❌ Error creating user:', createError);
-          throw new Error('Fehler beim Erstellen des Benutzers');
-        }
-
-        console.log('✅ New user created in Supabase:', newUser);
-        currentUser = newUser;
+        console.log('👤 Existing user login:', currentUser.email);
       }
 
       // Set authentication state
       setUser(currentUser);
       setIsAuthenticated(true);
       localStorage.setItem('mockUser', JSON.stringify(currentUser));
-      
-      // Reload data to reflect changes
-      await loadInitialData();
-      
+
       console.log('✅ Login successful');
       return currentUser;
-
     } catch (error) {
       console.error('❌ Login failed:', error);
       throw error;
@@ -183,25 +257,39 @@ export const AuthProvider = ({ children }) => {
 
   const updateUserProfile = async (profileData) => {
     try {
-      const { data: updatedUser, error } = await supabase
-        .from('users_auth_4k9x2')
-        .update({
-          ...profileData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id)
-        .select()
-        .single();
+      console.log('📝 Updating user profile:', user.id);
+      const updatedUser = {
+        ...user,
+        ...profileData,
+        updated_at: new Date().toISOString()
+      };
 
-      if (error) {
-        console.error('❌ Error updating user profile:', error);
-        throw error;
+      // Try Supabase first
+      try {
+        const { error } = await supabase
+          .from('users_sb2024')
+          .update({
+            ...profileData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+
+        if (!error) {
+          console.log('✅ Updated user profile in Supabase');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase update failed');
       }
 
+      // Always update local state
       setUser(updatedUser);
       localStorage.setItem('mockUser', JSON.stringify(updatedUser));
-      await loadInitialData(); // Reload to reflect changes
-      
+
+      // Update users list
+      const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u);
+      setUsers(updatedUsers);
+      localStorage.setItem('users_sb2024', JSON.stringify(updatedUsers));
+
       console.log('✅ User profile updated');
     } catch (error) {
       console.error('❌ Error updating profile:', error);
@@ -218,28 +306,43 @@ export const AuthProvider = ({ children }) => {
 
   const createInvitationCode = async (email, role = 'user', description = '') => {
     try {
+      console.log('🆕 Creating invitation code for:', email);
       const newCode = {
+        id: uuidv4(),
         code: `CODE${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
         email: email.toLowerCase().trim(),
         role,
-        is_active: true,
-        description: description || `Einladung für ${email}`
+        is_active: true, // 🔥 WICHTIG: NEUE CODES SIND STANDARDMÄSSIG AKTIV!
+        description: description || `Einladung für ${email}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await supabase
-        .from('invitation_codes_4k9x2')
-        .insert([newCode])
-        .select()
-        .single();
+      // Try Supabase first
+      try {
+        const { data, error } = await supabase
+          .from('invitation_codes_sb2024')
+          .insert([newCode])
+          .select()
+          .single();
 
-      if (error) {
-        console.error('❌ Error creating invitation code:', error);
-        throw error;
+        if (!error && data) {
+          console.log('✅ Created invitation code in Supabase:', data);
+          const updatedCodes = [data, ...invitationCodes];
+          setInvitationCodes(updatedCodes);
+          localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
+          return data;
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase failed, using local storage');
       }
 
-      console.log('➕ Created new invitation code in Supabase:', data);
-      await loadInitialData(); // Reload data
-      return data;
+      // Fallback: Local storage
+      console.log('📝 Creating invitation code locally');
+      const updatedCodes = [newCode, ...invitationCodes];
+      setInvitationCodes(updatedCodes);
+      localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
+      return newCode;
     } catch (error) {
       console.error('❌ Error creating invitation code:', error);
       throw error;
@@ -248,18 +351,26 @@ export const AuthProvider = ({ children }) => {
 
   const deleteInvitationCode = async (id) => {
     try {
-      const { error } = await supabase
-        .from('invitation_codes_4k9x2')
-        .delete()
-        .eq('id', id);
+      console.log('🗑️ Deleting invitation code:', id);
 
-      if (error) {
-        console.error('❌ Error deleting invitation code:', error);
-        throw error;
+      // Try Supabase first
+      try {
+        const { error } = await supabase
+          .from('invitation_codes_sb2024')
+          .delete()
+          .eq('id', id);
+
+        if (!error) {
+          console.log('✅ Deleted invitation code from Supabase');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase delete failed');
       }
 
-      console.log('🗑️ Deleted invitation code from Supabase:', id);
-      await loadInitialData(); // Reload data
+      // Always update local state
+      const updatedCodes = invitationCodes.filter(code => code.id !== id);
+      setInvitationCodes(updatedCodes);
+      localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
     } catch (error) {
       console.error('❌ Error deleting invitation code:', error);
       throw error;
@@ -268,24 +379,35 @@ export const AuthProvider = ({ children }) => {
 
   const toggleInvitationCode = async (id) => {
     try {
-      const code = invitationCodes.find(c => c.id === id);
-      if (!code) return;
+      console.log('🔄 Toggling invitation code:', id);
+      const currentCode = invitationCodes.find(c => c.id === id);
+      if (!currentCode) return;
 
-      const { error } = await supabase
-        .from('invitation_codes_4k9x2')
-        .update({ 
-          is_active: !code.is_active,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
+      const updates = {
+        is_active: !currentCode.is_active,
+        updated_at: new Date().toISOString()
+      };
 
-      if (error) {
-        console.error('❌ Error toggling invitation code:', error);
-        throw error;
+      // Try Supabase first
+      try {
+        const { error } = await supabase
+          .from('invitation_codes_sb2024')
+          .update(updates)
+          .eq('id', id);
+
+        if (!error) {
+          console.log('✅ Toggled invitation code in Supabase');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase toggle failed');
       }
 
-      console.log('🔄 Toggled invitation code in Supabase:', id);
-      await loadInitialData(); // Reload data
+      // Always update local state
+      const updatedCodes = invitationCodes.map(code =>
+        code.id === id ? { ...code, ...updates } : code
+      );
+      setInvitationCodes(updatedCodes);
+      localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
     } catch (error) {
       console.error('❌ Error toggling invitation code:', error);
       throw error;
@@ -294,21 +416,32 @@ export const AuthProvider = ({ children }) => {
 
   const updateInvitationCode = async (id, updates) => {
     try {
-      const { error } = await supabase
-        .from('invitation_codes_4k9x2')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
+      console.log('📝 Updating invitation code:', id);
+      const updateData = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
 
-      if (error) {
-        console.error('❌ Error updating invitation code:', error);
-        throw error;
+      // Try Supabase first
+      try {
+        const { error } = await supabase
+          .from('invitation_codes_sb2024')
+          .update(updateData)
+          .eq('id', id);
+
+        if (!error) {
+          console.log('✅ Updated invitation code in Supabase');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase update failed');
       }
 
-      console.log('✏️ Updated invitation code in Supabase:', id);
-      await loadInitialData(); // Reload data
+      // Always update local state
+      const updatedCodes = invitationCodes.map(code =>
+        code.id === id ? { ...code, ...updateData } : code
+      );
+      setInvitationCodes(updatedCodes);
+      localStorage.setItem('invitationCodes_sb2024', JSON.stringify(updatedCodes));
     } catch (error) {
       console.error('❌ Error updating invitation code:', error);
       throw error;
@@ -317,28 +450,38 @@ export const AuthProvider = ({ children }) => {
 
   const updateUserRole = async (userId, newRole) => {
     try {
-      const { error } = await supabase
-        .from('users_auth_4k9x2')
-        .update({ 
-          role: newRole,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
+      console.log('📝 Updating user role:', userId, 'to', newRole);
 
-      if (error) {
-        console.error('❌ Error updating user role:', error);
-        throw error;
+      // Try Supabase first
+      try {
+        const { error } = await supabase
+          .from('users_sb2024')
+          .update({
+            role: newRole,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (!error) {
+          console.log('✅ Updated user role in Supabase');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase update failed');
       }
+
+      // Always update local state
+      const updatedUsers = users.map(u =>
+        u.id === userId ? { ...u, role: newRole, updated_at: new Date().toISOString() } : u
+      );
+      setUsers(updatedUsers);
+      localStorage.setItem('users_sb2024', JSON.stringify(updatedUsers));
 
       // Update current user if it's the same user
       if (user && user.id === userId) {
-        const updatedUser = { ...user, role: newRole };
+        const updatedUser = { ...user, role: newRole, updated_at: new Date().toISOString() };
         setUser(updatedUser);
         localStorage.setItem('mockUser', JSON.stringify(updatedUser));
       }
-
-      console.log('✅ Updated user role in Supabase:', userId);
-      await loadInitialData(); // Reload data
     } catch (error) {
       console.error('❌ Error updating user role:', error);
       throw error;
@@ -347,18 +490,26 @@ export const AuthProvider = ({ children }) => {
 
   const deleteUser = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('users_auth_4k9x2')
-        .delete()
-        .eq('id', userId);
+      console.log('🗑️ Deleting user:', userId);
 
-      if (error) {
-        console.error('❌ Error deleting user:', error);
-        throw error;
+      // Try Supabase first
+      try {
+        const { error } = await supabase
+          .from('users_sb2024')
+          .delete()
+          .eq('id', userId);
+
+        if (!error) {
+          console.log('✅ Deleted user from Supabase');
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Supabase delete failed');
       }
 
-      console.log('🗑️ Deleted user from Supabase:', userId);
-      await loadInitialData(); // Reload data
+      // Always update local state
+      const updatedUsers = users.filter(u => u.id !== userId);
+      setUsers(updatedUsers);
+      localStorage.setItem('users_sb2024', JSON.stringify(updatedUsers));
     } catch (error) {
       console.error('❌ Error deleting user:', error);
       throw error;
@@ -369,27 +520,13 @@ export const AuthProvider = ({ children }) => {
   const resetAuth = async () => {
     try {
       console.log('🔄 Resetting auth system...');
-      
-      // Clear local storage
       localStorage.removeItem('mockUser');
+      localStorage.removeItem('users_sb2024');
+      localStorage.removeItem('invitationCodes_sb2024');
       setUser(null);
       setIsAuthenticated(false);
-      
-      // Clear Supabase tables
-      await supabase.from('users_auth_4k9x2').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('invitation_codes_4k9x2').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      // Recreate admin code
-      await supabase
-        .from('invitation_codes_4k9x2')
-        .insert([{
-          code: 'ADMIN2024',
-          email: 'admin@example.com',
-          role: 'admin',
-          is_active: true,
-          description: 'Standard Admin-Zugang'
-        }]);
-      
+      setUsers([]);
+      setInvitationCodes([]);
       await loadInitialData();
       console.log('✅ Auth system reset complete');
     } catch (error) {
@@ -408,7 +545,7 @@ export const AuthProvider = ({ children }) => {
     loginWithInvitationCode,
     updateUserProfile,
     logout,
-    resetAuth, // For debugging
+    resetAuth,
     // Admin functions
     invitationCodes,
     users,

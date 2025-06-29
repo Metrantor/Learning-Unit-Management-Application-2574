@@ -5,10 +5,11 @@ const DiaflowWrapper = ({ children }) => {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
+    console.log('🔄 DiaflowWrapper - Auth status:', isAuthenticated);
+    
     // Wait for DOM and Diaflow script to be ready
     const checkAndToggleDiaflow = () => {
       const diaflowElement = document.getElementById('diaflow-chat');
-      
       if (diaflowElement) {
         if (isAuthenticated) {
           diaflowElement.style.display = 'block';
@@ -32,7 +33,7 @@ const DiaflowWrapper = ({ children }) => {
 
     // Initial check with delay to ensure DOM is ready
     const timer = setTimeout(checkAndToggleDiaflow, 1000);
-
+    
     return () => clearTimeout(timer);
   }, [isAuthenticated]);
 

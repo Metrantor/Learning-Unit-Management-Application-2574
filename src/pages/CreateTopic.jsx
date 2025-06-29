@@ -16,13 +16,31 @@ const CreateTopic = () => {
     description: '',
     trainingModuleId: searchParams.get('trainingModuleId') || ''
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    const newTopic = createTopic(formData);
-    navigate(`/topics/${newTopic.id}`);
+    setIsLoading(true);
+    try {
+      console.log('🆕 Creating topic with data:', formData);
+      const newTopic = await createTopic(formData);
+      console.log('✅ Topic created:', newTopic);
+      
+      if (newTopic && newTopic.id) {
+        console.log('🔄 Navigating to topic:', newTopic.id);
+        navigate(`/topics/${newTopic.id}`);
+      } else {
+        console.error('❌ No ID returned from createTopic');
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('❌ Error creating topic:', error);
+      alert('Fehler beim Erstellen des Themas: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -62,7 +80,8 @@ const CreateTopic = () => {
               value={formData.title}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               placeholder="Geben Sie einen aussagekräftigen Titel ein..."
             />
           </div>
@@ -77,7 +96,8 @@ const CreateTopic = () => {
               value={formData.description}
               onChange={handleChange}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               placeholder="Beschreiben Sie das Thema und die geplanten Lerneinheiten..."
             />
           </div>
@@ -86,17 +106,18 @@ const CreateTopic = () => {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors disabled:opacity-50"
             >
               Abbrechen
             </button>
             <button
               type="submit"
-              disabled={!formData.title.trim()}
+              disabled={!formData.title.trim() || isLoading}
               className="inline-flex items-center px-4 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <SafeIcon icon={FiSave} className="h-4 w-4 mr-2" />
-              Erstellen
+              {isLoading ? 'Erstelle...' : 'Erstellen'}
             </button>
           </div>
         </form>
