@@ -25,7 +25,8 @@
     "react-sortablejs": "^6.1.4",
     "sortablejs": "^1.15.0",
     "react-dnd": "^16.0.1",
-    "react-dnd-html5-backend": "^16.0.1"
+    "react-dnd-html5-backend": "^16.0.1",
+    "@supabase/supabase-js": "^2.39.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

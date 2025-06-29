@@ -42,54 +42,48 @@ const AppContent = () => {
   }
 
   if (!isAuthenticated) {
-    return (
-      <DiaflowWrapper>
-        <LoginForm />
-      </DiaflowWrapper>
-    );
+    return <LoginForm />;
   }
 
   return (
-    <DiaflowWrapper>
-      <LearningUnitProvider>
-        <IdeasProvider>
-          <Router>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/admin" element={<AdminPanel />} />
-                <Route path="/kanban" element={<KanbanBoard />} />
-                <Route path="/ideas" element={<IdeasKanban />} />
+    <LearningUnitProvider>
+      <IdeasProvider>
+        <Router>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/kanban" element={<KanbanBoard />} />
+              <Route path="/ideas" element={<IdeasKanban />} />
 
-                {/* Subjects */}
-                <Route path="/subjects/create" element={<CreateSubject />} />
-                <Route path="/subjects/:id" element={<SubjectDetail />} />
-                <Route path="/subjects/:id/edit" element={<EditSubject />} />
+              {/* Subjects */}
+              <Route path="/subjects/create" element={<CreateSubject />} />
+              <Route path="/subjects/:id" element={<SubjectDetail />} />
+              <Route path="/subjects/:id/edit" element={<EditSubject />} />
 
-                {/* Trainings */}
-                <Route path="/trainings/create" element={<CreateTraining />} />
-                <Route path="/trainings/:id" element={<TrainingDetail />} />
-                <Route path="/trainings/:id/edit" element={<EditTraining />} />
+              {/* Trainings */}
+              <Route path="/trainings/create" element={<CreateTraining />} />
+              <Route path="/trainings/:id" element={<TrainingDetail />} />
+              <Route path="/trainings/:id/edit" element={<EditTraining />} />
 
-                {/* Training Modules */}
-                <Route path="/training-modules/create" element={<CreateTrainingModule />} />
-                <Route path="/training-modules/:id" element={<TrainingModuleDetail />} />
-                <Route path="/training-modules/:id/edit" element={<EditTrainingModule />} />
+              {/* Training Modules */}
+              <Route path="/training-modules/create" element={<CreateTrainingModule />} />
+              <Route path="/training-modules/:id" element={<TrainingModuleDetail />} />
+              <Route path="/training-modules/:id/edit" element={<EditTrainingModule />} />
 
-                {/* Topics */}
-                <Route path="/topics/create" element={<CreateTopic />} />
-                <Route path="/topics/:id" element={<TopicDetail />} />
-                <Route path="/topics/:id/edit" element={<EditTopic />} />
+              {/* Topics */}
+              <Route path="/topics/create" element={<CreateTopic />} />
+              <Route path="/topics/:id" element={<TopicDetail />} />
+              <Route path="/topics/:id/edit" element={<EditTopic />} />
 
-                {/* Learning Units */}
-                <Route path="/create" element={<CreateLearningUnit />} />
-                <Route path="/unit/:id" element={<LearningUnitDetail />} />
-              </Routes>
-            </Layout>
-          </Router>
-        </IdeasProvider>
-      </LearningUnitProvider>
-    </DiaflowWrapper>
+              {/* Learning Units */}
+              <Route path="/create" element={<CreateLearningUnit />} />
+              <Route path="/unit/:id" element={<LearningUnitDetail />} />
+            </Routes>
+          </Layout>
+        </Router>
+      </IdeasProvider>
+    </LearningUnitProvider>
   );
 };
 
@@ -97,7 +91,9 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <DiaflowWrapper>
+          <AppContent />
+        </DiaflowWrapper>
       </AuthProvider>
     </ThemeProvider>
   );

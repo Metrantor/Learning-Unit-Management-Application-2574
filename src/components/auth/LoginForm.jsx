@@ -1,30 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import SafeIcon from '../../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiMail, FiKey, FiLogIn } = FiIcons;
+const { FiMail, FiKey, FiLogIn, FiBug } = FiIcons;
 
 const LoginForm = () => {
-  const { loginWithInvitationCode } = useAuth();
+  const { loginWithInvitationCode, invitationCodes } = useAuth();
   const [formData, setFormData] = useState({
     email: 'admin@example.com', // Pre-filled for convenience
-    invitationCode: 'ADMIN2024'   // Pre-filled for convenience
+    invitationCode: 'ADMIN2024' // Pre-filled for convenience
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+
+  // Debug: Log available codes when component mounts
+  useEffect(() => {
+    console.log('🐛 LoginForm mounted, available codes:', invitationCodes);
+  }, [invitationCodes]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
+    console.log('🔐 Login form submitted');
+    console.log('📧 Email:', formData.email);
+    console.log('🔑 Code:', formData.invitationCode);
+
     try {
       await loginWithInvitationCode(formData.email, formData.invitationCode);
+      console.log('✅ Login successful');
     } catch (err) {
+      console.error('❌ Login failed:', err);
       setError(err.message);
-      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -35,6 +46,12 @@ const LoginForm = () => {
       ...prev,
       [e.target.name]: e.target.value
     }));
+  };
+
+  const handleDebugReset = () => {
+    console.log('🔧 Debug: Clearing localStorage and resetting...');
+    localStorage.clear();
+    window.location.reload();
   };
 
   return (
@@ -52,7 +69,7 @@ const LoginForm = () => {
             Anmelden
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Verwenden Sie Ihren Einladungscode, um sich anzumelden
+            Verwenden Sie Ihren Einladungscode als Passwort
           </p>
         </div>
 
@@ -81,7 +98,7 @@ const LoginForm = () => {
 
             <div>
               <label htmlFor="invitationCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Einladungscode
+                Einladungscode (Passwort)
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -95,7 +112,7 @@ const LoginForm = () => {
                   value={formData.invitationCode}
                   onChange={handleChange}
                   className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10"
-                  placeholder="Geben Sie Ihren Einladungscode ein"
+                  placeholder="Geben Sie Ihren Code ein"
                 />
               </div>
             </div>
@@ -120,7 +137,7 @@ const LoginForm = () => {
 
         <div className="text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Sie haben noch keinen Einladungscode? Wenden Sie sich an Ihren Administrator.
+            Sie können sich mit Ihrem Code beliebig oft anmelden.
           </p>
           <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
             <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
@@ -130,6 +147,43 @@ const LoginForm = () => {
               <strong>E-Mail:</strong> admin@example.com<br />
               <strong>Code:</strong> ADMIN2024
             </p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+              💡 Dieser Code funktioniert dauerhaft als Passwort
+            </p>
+          </div>
+
+          {/* Debug Section */}
+          <div className="mt-4">
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <SafeIcon icon={FiBug} className="h-3 w-3 mr-1 inline" />
+              Debug Info {showDebug ? '▼' : '▶'}
+            </button>
+            
+            {showDebug && (
+              <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded text-left">
+                <p className="text-xs font-mono text-gray-700 dark:text-gray-300 mb-2">
+                  <strong>Verfügbare Codes:</strong>
+                </p>
+                {invitationCodes.length > 0 ? (
+                  invitationCodes.map(code => (
+                    <div key={code.id} className="text-xs font-mono text-gray-600 dark:text-gray-400 mb-1">
+                      {code.email} → {code.code} ({code.isActive ? 'Aktiv' : 'Inaktiv'})
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-red-600 dark:text-red-400">Keine Codes gefunden!</p>
+                )}
+                <button
+                  onClick={handleDebugReset}
+                  className="mt-2 text-xs bg-red-500 text-white px-2 py-1 rounded"
+                >
+                  LocalStorage löschen & neu starten
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
