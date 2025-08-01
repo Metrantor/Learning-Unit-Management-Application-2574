@@ -2,14 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useLearningUnits, EDITORIAL_STATES } from '../context/LearningUnitContext';
+import { useAuth } from '../context/AuthContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiFilter, FiFileText, FiBook, FiPackage, FiFolder, FiTarget, FiCalendar, FiClock, FiTag } = FiIcons;
+const { FiFilter, FiFileText, FiBook, FiPackage, FiFolder, FiTarget, FiCalendar, FiClock, FiTag, FiUser, FiUsers, FiEyeOff, FiEye } = FiIcons;
 
 const ITEM_TYPE = 'LEARNING_UNIT';
 
-const KanbanCard = ({ unit, onClick }) => {
+const KanbanCard = ({ unit, onClick, showOwner = false, users = [] }) => {
   const [{ isDragging }, drag] = useDrag({
     type: ITEM_TYPE,
     item: { id: unit.id },
@@ -34,6 +35,20 @@ const KanbanCard = ({ unit, onClick }) => {
     };
   };
 
+  // Get owner info
+  const getOwnerInfo = () => {
+    const topic = unit.topicId ? window.topicsCache?.find(t => t.id === unit.topicId) : null;
+    if (!topic?.ownerId) return null;
+    
+    return users.find(user => user.id === topic.ownerId) || { 
+      id: topic.ownerId, 
+      name: 'Unbekannt', 
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=unknown' 
+    };
+  };
+
+  const ownerInfo = showOwner ? getOwnerInfo() : null;
+
   return (
     <div
       ref={drag}
@@ -42,6 +57,20 @@ const KanbanCard = ({ unit, onClick }) => {
         isDragging ? 'opacity-50' : ''
       }`}
     >
+      {/* Owner Info */}
+      {showOwner && ownerInfo && (
+        <div className="flex items-center mb-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+          <img 
+            src={ownerInfo.avatar} 
+            alt={ownerInfo.name}
+            className="w-5 h-5 rounded-full mr-2"
+          />
+          <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+            {ownerInfo.name}
+          </span>
+        </div>
+      )}
+
       <h4 className="font-medium text-gray-900 dark:text-white text-sm mb-2 line-clamp-2">
         {unit.title}
       </h4>
@@ -105,7 +134,7 @@ const KanbanCard = ({ unit, onClick }) => {
   );
 };
 
-const KanbanColumn = ({ title, state, units, onDrop, onCardClick }) => {
+const KanbanColumn = ({ title, state, units, onDrop, onCardClick, showOwner, users, isHidden = false }) => {
   const [{ isOver }, drop] = useDrop({
     accept: ITEM_TYPE,
     drop: (item) => onDrop(item.id, state),
@@ -125,6 +154,10 @@ const KanbanColumn = ({ title, state, units, onDrop, onCardClick }) => {
     return colors[state] || 'border-gray-300 bg-gray-50 dark:bg-gray-800';
   };
 
+  if (isHidden) {
+    return null;
+  }
+
   return (
     <div
       ref={drop}
@@ -141,7 +174,13 @@ const KanbanColumn = ({ title, state, units, onDrop, onCardClick }) => {
 
       <div className="space-y-3">
         {units.map((unit) => (
-          <KanbanCard key={unit.id} unit={unit} onClick={onCardClick} />
+          <KanbanCard 
+            key={unit.id} 
+            unit={unit} 
+            onClick={onCardClick} 
+            showOwner={showOwner}
+            users={users}
+          />
         ))}
       </div>
     </div>
@@ -162,8 +201,18 @@ const KanbanBoard = () => {
     getSubject 
   } = useLearningUnits();
 
+  const { users } = useAuth();
+
   const [filter, setFilter] = useState({ type: 'all', id: null });
   const [tagFilter, setTagFilter] = useState('');
+  const [userFilter, setUserFilter] = useState('all');
+  const [showOwner, setShowOwner] = useState(false);
+  const [hidePublished, setHidePublished] = useState(false);
+
+  // Cache topics for performance
+  React.useEffect(() => {
+    window.topicsCache = topics;
+  }, [topics]);
 
   // Get all unique tags for filter dropdown
   const allTags = useMemo(() => {
@@ -175,6 +224,21 @@ const KanbanBoard = () => {
     });
     return Array.from(tagMap.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [learningUnits]);
+
+  // Get all users who own topics
+  const topicOwners = useMemo(() => {
+    const ownerIds = new Set();
+    topics.forEach(topic => {
+      if (topic.ownerId) {
+        ownerIds.add(topic.ownerId);
+      }
+    });
+    
+    return Array.from(ownerIds)
+      .map(ownerId => users.find(user => user.id === ownerId))
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [topics, users]);
 
   const filteredUnits = useMemo(() => {
     let units = learningUnits;
@@ -225,8 +289,16 @@ const KanbanBoard = () => {
       );
     }
 
+    // Apply user filter
+    if (userFilter !== 'all') {
+      units = units.filter(unit => {
+        const topic = unit.topicId ? getTopic(unit.topicId) : null;
+        return topic?.ownerId === userFilter;
+      });
+    }
+
     return units;
-  }, [learningUnits, filter, tagFilter, trainings, trainingModules, topics]);
+  }, [learningUnits, filter, tagFilter, userFilter, trainings, trainingModules, topics, getTopic]);
 
   const groupedUnits = useMemo(() => {
     const groups = {};
@@ -269,6 +341,10 @@ const KanbanBoard = () => {
     return allTags.find(tag => tag.id === tagFilter);
   };
 
+  const getSelectedUser = () => {
+    return topicOwners.find(user => user.id === userFilter);
+  };
+
   const getTagStyle = (color) => {
     return {
       backgroundColor: color,
@@ -276,26 +352,52 @@ const KanbanBoard = () => {
     };
   };
 
+  const visibleStates = hidePublished 
+    ? Object.values(EDITORIAL_STATES).filter(state => state !== EDITORIAL_STATES.PUBLISHED)
+    : Object.values(EDITORIAL_STATES);
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Kanban Board</h2>
 
-          {/* Filter Controls */}
+          {/* View Options */}
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowOwner(!showOwner)}
+                className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showOwner
+                    ? 'bg-primary-600 dark:bg-primary-700 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                <SafeIcon icon={FiUser} className="h-4 w-4 mr-2" />
+                Nach Nutzern sortieren
+              </button>
+              
+              <button
+                onClick={() => setHidePublished(!hidePublished)}
+                className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  hidePublished
+                    ? 'bg-purple-600 dark:bg-purple-700 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                <SafeIcon icon={hidePublished ? FiEyeOff : FiEye} className="h-4 w-4 mr-2" />
+                Publiziert ausblenden
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter Controls */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center space-x-2">
               <SafeIcon icon={FiFilter} className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Filter: {getFilterLabel()}</span>
-              {getSelectedTag() && (
-                <span
-                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                  style={getTagStyle(getSelectedTag().color)}
-                >
-                  <SafeIcon icon={FiTag} className="h-3 w-3 mr-1" />
-                  {getSelectedTag().label}
-                </span>
-              )}
+              <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Filter:</span>
             </div>
             
             {/* Hierarchy Filter */}
@@ -338,6 +440,22 @@ const KanbanBoard = () => {
               </optgroup>
             </select>
 
+            {/* User Filter */}
+            {topicOwners.length > 0 && (
+              <select
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              >
+                <option value="all">Alle Nutzer</option>
+                {topicOwners.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
             {/* Tag Filter */}
             {allTags.length > 0 && (
               <select
@@ -353,15 +471,36 @@ const KanbanBoard = () => {
                 ))}
               </select>
             )}
+
+            {/* Active Filters Display */}
+            <div className="flex flex-wrap items-center gap-2">
+              {getSelectedTag() && (
+                <span
+                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                  style={getTagStyle(getSelectedTag().color)}
+                >
+                  <SafeIcon icon={FiTag} className="h-3 w-3 mr-1" />
+                  {getSelectedTag().label}
+                </span>
+              )}
+              
+              {getSelectedUser() && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                  <SafeIcon icon={FiUsers} className="h-3 w-3 mr-1" />
+                  {getSelectedUser().name}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="text-center text-sm text-gray-600 dark:text-gray-400 mb-4">
           {filteredUnits.length} Lerneinheiten • Ziehen Sie Karten zwischen den Spalten, um den Status zu ändern
+          {hidePublished && ' • Publizierte Inhalte ausgeblendet'}
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {Object.entries(EDITORIAL_STATES).map(([key, state]) => (
+          {visibleStates.map((state) => (
             <KanbanColumn
               key={state}
               title={state}
@@ -369,6 +508,9 @@ const KanbanBoard = () => {
               units={groupedUnits[state] || []}
               onDrop={handleDrop}
               onCardClick={handleCardClick}
+              showOwner={showOwner}
+              users={users}
+              isHidden={hidePublished && state === EDITORIAL_STATES.PUBLISHED}
             />
           ))}
         </div>
@@ -380,7 +522,7 @@ const KanbanBoard = () => {
               Keine Lerneinheiten gefunden
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {filter.type === 'all' && !tagFilter
+              {filter.type === 'all' && !tagFilter && userFilter === 'all'
                 ? 'Erstellen Sie Ihre erste Lerneinheit.' 
                 : 'Keine Lerneinheiten für die ausgewählten Filter gefunden.'
               }

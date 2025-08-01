@@ -54,7 +54,7 @@ const Layout = ({ children }) => {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <SafeIcon icon={FiBook} className="h-8 w-8 text-primary-600 dark:text-primary-400 mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">SkillBase Workshop</h1>
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">L.U.M.A</h1>
             </div>
 
             <div className="flex items-center space-x-4">

@@ -84,9 +84,9 @@ export const LearningUnitProvider = ({ children }) => {
           name: unit.powerPointFile.name
           // ❌ NO size, type, uploadedAt!
         } : null,
-        // 🔥 TAGS: Include tags
+        // 🔥 TAGS: Include tags - CRITICAL FOR FILTERING
         tags: unit.tags || [],
-        // 🔥 CONTENT TYPES: Include content types
+        // 🔥 CONTENT TYPES: Include content types - CRITICAL FOR FILTERING
         contentTypes: unit.contentTypes || [],
         customContentTypes: unit.customContentTypes || []
       };
@@ -269,6 +269,7 @@ export const LearningUnitProvider = ({ children }) => {
     }
   };
 
+  // 🔥 CRITICAL: FIXED LOADING WITH PROPER TAGS AND CONTENT TYPES
   const loadLearningUnits = async () => {
     try {
       console.log('📖 Loading learning units...');
@@ -278,23 +279,57 @@ export const LearningUnitProvider = ({ children }) => {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        const frontendData = data.map(unit => ({
-          ...unit,
-          editorialState: unit.editorial_state || EDITORIAL_STATES.PLANNING,
-          learningGoals: unit.learning_goals || [],
-          speechText: unit.speech_text || '',
-          textSnippets: unit.text_snippets || [],
-          powerPointFile: unit.powerpoint_file || null,
-          explanationComments: unit.explanation_comments || [],
-          speechTextComments: unit.speech_text_comments || [],
-          topicId: unit.topic_id,
-          targetDate: unit.target_date,
-          // 🔥 CRITICAL: Include tags and contentTypes from DB
-          tags: unit.tags || [],
-          contentTypes: unit.content_types || [],
-          customContentTypes: unit.custom_content_types || []
-        }));
+        console.log('✅ Raw data from Supabase:', data.length, 'units');
+        
+        const frontendData = data.map(unit => {
+          // 🔥 CRITICAL: Ensure proper JSON parsing for arrays
+          let tags = [];
+          let contentTypes = [];
+          let customContentTypes = [];
+          
+          try {
+            tags = Array.isArray(unit.tags) ? unit.tags : (unit.tags ? JSON.parse(unit.tags) : []);
+          } catch (e) {
+            console.warn('Failed to parse tags for unit', unit.id, ':', e);
+            tags = [];
+          }
+          
+          try {
+            contentTypes = Array.isArray(unit.content_types) ? unit.content_types : (unit.content_types ? JSON.parse(unit.content_types) : []);
+          } catch (e) {
+            console.warn('Failed to parse content_types for unit', unit.id, ':', e);
+            contentTypes = [];
+          }
+          
+          try {
+            customContentTypes = Array.isArray(unit.custom_content_types) ? unit.custom_content_types : (unit.custom_content_types ? JSON.parse(unit.custom_content_types) : []);
+          } catch (e) {
+            console.warn('Failed to parse custom_content_types for unit', unit.id, ':', e);
+            customContentTypes = [];
+          }
+          
+          return {
+            ...unit,
+            editorialState: unit.editorial_state || EDITORIAL_STATES.PLANNING,
+            learningGoals: unit.learning_goals || [],
+            speechText: unit.speech_text || '',
+            textSnippets: unit.text_snippets || [],
+            powerPointFile: unit.powerpoint_file || null,
+            explanationComments: unit.explanation_comments || [],
+            speechTextComments: unit.speech_text_comments || [],
+            topicId: unit.topic_id,
+            targetDate: unit.target_date,
+            // 🔥 CRITICAL: Properly map tags and contentTypes from DB
+            tags: tags,
+            contentTypes: contentTypes,
+            customContentTypes: customContentTypes
+          };
+        });
+        
         console.log('✅ Loaded learning units from Supabase:', frontendData.length);
+        console.log('🏷️ Sample unit tags:', frontendData[0]?.tags);
+        console.log('📋 Sample unit contentTypes:', frontendData[0]?.contentTypes);
+        
         setLearningUnits(frontendData);
         
         // 🔥 CRITICAL: Clean data before localStorage
@@ -932,6 +967,9 @@ export const LearningUnitProvider = ({ children }) => {
 
       // Try Supabase first
       try {
+        console.log('💾 Creating learning unit in Supabase with tags:', newUnit.tags);
+        console.log('💾 Creating learning unit in Supabase with contentTypes:', newUnit.contentTypes);
+        
         const { data, error } = await supabase
           .from('learning_units_sb2024')
           .insert([{
@@ -953,10 +991,10 @@ export const LearningUnitProvider = ({ children }) => {
             urls: newUnit.urls,
             video: newUnit.video,
             target_date: newUnit.targetDate,
-            // 🔥 CRITICAL: Store tags and contentTypes in DB
-            tags: newUnit.tags,
-            content_types: newUnit.contentTypes,
-            custom_content_types: newUnit.customContentTypes,
+            // 🔥 CRITICAL: Store tags and contentTypes in DB as JSON
+            tags: JSON.stringify(newUnit.tags),
+            content_types: JSON.stringify(newUnit.contentTypes),
+            custom_content_types: JSON.stringify(newUnit.customContentTypes),
             created_at: newUnit.created_at,
             updated_at: newUnit.updated_at
           }])
@@ -965,6 +1003,20 @@ export const LearningUnitProvider = ({ children }) => {
 
         if (!error && data) {
           console.log('✅ Created learning unit in Supabase:', data.title);
+          
+          // 🔥 CRITICAL: Properly map response data
+          let tags = [];
+          let contentTypes = [];
+          let customContentTypes = [];
+          
+          try {
+            tags = Array.isArray(data.tags) ? data.tags : (data.tags ? JSON.parse(data.tags) : []);
+            contentTypes = Array.isArray(data.content_types) ? data.content_types : (data.content_types ? JSON.parse(data.content_types) : []);
+            customContentTypes = Array.isArray(data.custom_content_types) ? data.custom_content_types : (data.custom_content_types ? JSON.parse(data.custom_content_types) : []);
+          } catch (e) {
+            console.warn('Error parsing arrays in create response:', e);
+          }
+          
           const frontendData = {
             ...data,
             editorialState: data.editorial_state,
@@ -977,10 +1029,14 @@ export const LearningUnitProvider = ({ children }) => {
             topicId: data.topic_id,
             targetDate: data.target_date,
             // 🔥 CRITICAL: Map tags and contentTypes from DB
-            tags: data.tags || [],
-            contentTypes: data.content_types || [],
-            customContentTypes: data.custom_content_types || []
+            tags: tags,
+            contentTypes: contentTypes,
+            customContentTypes: customContentTypes
           };
+          
+          console.log('✅ Mapped frontend data tags:', frontendData.tags);
+          console.log('✅ Mapped frontend data contentTypes:', frontendData.contentTypes);
+          
           const updatedUnits = [frontendData, ...learningUnits];
           setLearningUnits(updatedUnits);
           
@@ -991,7 +1047,7 @@ export const LearningUnitProvider = ({ children }) => {
           return frontendData;
         }
       } catch (supabaseError) {
-        console.log('⚠️ Supabase failed, using local storage');
+        console.log('⚠️ Supabase failed, using local storage:', supabaseError);
       }
 
       // Fallback: Local storage
@@ -1014,6 +1070,18 @@ export const LearningUnitProvider = ({ children }) => {
   const updateLearningUnit = async (id, updates) => {
     try {
       console.log('📝 Updating learning unit:', id, 'Fields:', Object.keys(updates));
+      
+      // 🔥 CRITICAL: Log tags and content types updates
+      if (updates.tags) {
+        console.log('🏷️ Updating tags:', updates.tags);
+      }
+      if (updates.contentTypes) {
+        console.log('📋 Updating contentTypes:', updates.contentTypes);
+      }
+      if (updates.customContentTypes) {
+        console.log('🛠️ Updating customContentTypes:', updates.customContentTypes);
+      }
+      
       const updatedData = {
         ...updates,
         updated_at: new Date().toISOString()
@@ -1045,6 +1113,22 @@ export const LearningUnitProvider = ({ children }) => {
           }
         });
 
+        // 🔥 CRITICAL: Convert arrays to JSON strings for database storage
+        if (updates.tags !== undefined) {
+          dbUpdates.tags = JSON.stringify(updates.tags);
+          console.log('💾 Storing tags as JSON:', dbUpdates.tags);
+        }
+        if (updates.contentTypes !== undefined) {
+          dbUpdates.content_types = JSON.stringify(updates.contentTypes);
+          console.log('💾 Storing contentTypes as JSON:', dbUpdates.content_types);
+        }
+        if (updates.customContentTypes !== undefined) {
+          dbUpdates.custom_content_types = JSON.stringify(updates.customContentTypes);
+          console.log('💾 Storing customContentTypes as JSON:', dbUpdates.custom_content_types);
+        }
+
+        console.log('💾 Sending to Supabase:', Object.keys(dbUpdates));
+
         const { error } = await supabase
           .from('learning_units_sb2024')
           .update(dbUpdates)
@@ -1069,6 +1153,15 @@ export const LearningUnitProvider = ({ children }) => {
       console.log('🧹 Cleaning data for localStorage after update...');
       const cleanedUnits = cleanLearningUnitsForStorage(updatedUnits);
       saveToLocalStorageSafely('learningUnits_sb2024', cleanedUnits);
+      
+      // 🔥 CRITICAL: Verify the update worked
+      const updatedUnit = updatedUnits.find(unit => unit.id === id);
+      if (updates.tags && updatedUnit) {
+        console.log('✅ Tags updated successfully:', updatedUnit.tags);
+      }
+      if (updates.contentTypes && updatedUnit) {
+        console.log('✅ ContentTypes updated successfully:', updatedUnit.contentTypes);
+      }
       
     } catch (error) {
       console.error('❌ Error updating learning unit:', error);
