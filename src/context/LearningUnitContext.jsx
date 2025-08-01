@@ -83,7 +83,12 @@ export const LearningUnitProvider = ({ children }) => {
         powerPointFile: unit.powerPointFile ? {
           name: unit.powerPointFile.name
           // ❌ NO size, type, uploadedAt!
-        } : null
+        } : null,
+        // 🔥 TAGS: Include tags
+        tags: unit.tags || [],
+        // 🔥 CONTENT TYPES: Include content types
+        contentTypes: unit.contentTypes || [],
+        customContentTypes: unit.customContentTypes || []
       };
       
       return cleaned;
@@ -119,7 +124,8 @@ export const LearningUnitProvider = ({ children }) => {
         localStorage.removeItem(key);
         const minimalData = data.slice(0, 10).map(unit => ({
           id: unit.id,
-          title: unit.title
+          title: unit.title,
+          topicId: unit.topicId
         }));
         localStorage.setItem(key, JSON.stringify(minimalData));
         console.log('🆘 Minimal data saved as last resort');
@@ -245,7 +251,8 @@ export const LearningUnitProvider = ({ children }) => {
       if (!error && data) {
         const frontendData = data.map(topic => ({
           ...topic,
-          trainingModuleId: topic.training_module_id
+          trainingModuleId: topic.training_module_id,
+          ownerId: topic.owner_id // Map owner_id from database
         }));
         console.log('✅ Loaded topics from Supabase:', frontendData.length);
         setTopics(frontendData);
@@ -281,7 +288,11 @@ export const LearningUnitProvider = ({ children }) => {
           explanationComments: unit.explanation_comments || [],
           speechTextComments: unit.speech_text_comments || [],
           topicId: unit.topic_id,
-          targetDate: unit.target_date
+          targetDate: unit.target_date,
+          // 🔥 CRITICAL: Include tags and contentTypes from DB
+          tags: unit.tags || [],
+          contentTypes: unit.content_types || [],
+          customContentTypes: unit.custom_content_types || []
         }));
         console.log('✅ Loaded learning units from Supabase:', frontendData.length);
         setLearningUnits(frontendData);
@@ -752,6 +763,7 @@ export const LearningUnitProvider = ({ children }) => {
         title: topicData.title,
         description: topicData.description || '',
         trainingModuleId: topicData.trainingModuleId || null,
+        ownerId: topicData.ownerId || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -765,6 +777,7 @@ export const LearningUnitProvider = ({ children }) => {
             title: newTopic.title,
             description: newTopic.description,
             training_module_id: newTopic.trainingModuleId,
+            owner_id: newTopic.ownerId,
             created_at: newTopic.created_at,
             updated_at: newTopic.updated_at
           }])
@@ -773,7 +786,11 @@ export const LearningUnitProvider = ({ children }) => {
 
         if (!error && data) {
           console.log('✅ Created topic in Supabase:', data.title);
-          const frontendData = { ...data, trainingModuleId: data.training_module_id };
+          const frontendData = { 
+            ...data, 
+            trainingModuleId: data.training_module_id,
+            ownerId: data.owner_id
+          };
           const updatedTopics = [frontendData, ...topics];
           setTopics(updatedTopics);
           saveToLocalStorageSafely('topics_sb2024', updatedTopics);
@@ -809,6 +826,10 @@ export const LearningUnitProvider = ({ children }) => {
         if (updates.trainingModuleId !== undefined) {
           dbUpdates.training_module_id = updates.trainingModuleId;
           delete dbUpdates.trainingModuleId;
+        }
+        if (updates.ownerId !== undefined) {
+          dbUpdates.owner_id = updates.ownerId;
+          delete dbUpdates.ownerId;
         }
 
         const { error } = await supabase
@@ -901,6 +922,10 @@ export const LearningUnitProvider = ({ children }) => {
         urls: unitData.urls || [],
         video: unitData.video || null,
         targetDate: unitData.targetDate || null,
+        // 🔥 CRITICAL: Include tags and contentTypes
+        tags: unitData.tags || [],
+        contentTypes: unitData.contentTypes || [],
+        customContentTypes: unitData.customContentTypes || [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -928,6 +953,10 @@ export const LearningUnitProvider = ({ children }) => {
             urls: newUnit.urls,
             video: newUnit.video,
             target_date: newUnit.targetDate,
+            // 🔥 CRITICAL: Store tags and contentTypes in DB
+            tags: newUnit.tags,
+            content_types: newUnit.contentTypes,
+            custom_content_types: newUnit.customContentTypes,
             created_at: newUnit.created_at,
             updated_at: newUnit.updated_at
           }])
@@ -946,7 +975,11 @@ export const LearningUnitProvider = ({ children }) => {
             explanationComments: data.explanation_comments,
             speechTextComments: data.speech_text_comments,
             topicId: data.topic_id,
-            targetDate: data.target_date
+            targetDate: data.target_date,
+            // 🔥 CRITICAL: Map tags and contentTypes from DB
+            tags: data.tags || [],
+            contentTypes: data.content_types || [],
+            customContentTypes: data.custom_content_types || []
           };
           const updatedUnits = [frontendData, ...learningUnits];
           setLearningUnits(updatedUnits);
@@ -977,7 +1010,7 @@ export const LearningUnitProvider = ({ children }) => {
     }
   };
 
-  // 🚀 MOST CRITICAL FUNCTION: updateLearningUnit with SAFE localStorage
+  // 🚀 MOST CRITICAL FUNCTION: updateLearningUnit with SAFE localStorage and TAGS/CONTENT_TYPES
   const updateLearningUnit = async (id, updates) => {
     try {
       console.log('📝 Updating learning unit:', id, 'Fields:', Object.keys(updates));
@@ -999,7 +1032,10 @@ export const LearningUnitProvider = ({ children }) => {
           explanationComments: 'explanation_comments',
           speechTextComments: 'speech_text_comments',
           topicId: 'topic_id',
-          targetDate: 'target_date'
+          targetDate: 'target_date',
+          // 🔥 CRITICAL: Map tags and contentTypes
+          contentTypes: 'content_types',
+          customContentTypes: 'custom_content_types'
         };
 
         Object.keys(keyMappings).forEach(frontendKey => {
@@ -1016,6 +1052,8 @@ export const LearningUnitProvider = ({ children }) => {
 
         if (!error) {
           console.log('✅ Updated learning unit in Supabase');
+        } else {
+          console.log('⚠️ Supabase update error:', error);
         }
       } catch (supabaseError) {
         console.log('⚠️ Supabase update failed:', supabaseError);

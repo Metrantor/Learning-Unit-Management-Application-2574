@@ -2,10 +2,18 @@ import React, { useState, useRef } from 'react';
 import { useLearningUnits, EDITORIAL_STATES } from '../../context/LearningUnitContext';
 import { v4 as uuidv4 } from 'uuid';
 import SafeIcon from '../../common/SafeIcon';
+import TagsManager from '../TagsManager';
 import * as FiIcons from 'react-icons/fi';
 import supabase from '../../lib/supabase';
 
-const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen, FiCalendar, FiClock } = FiIcons;
+const { FiEdit3, FiTarget, FiPlus, FiTrash2, FiSettings, FiFile, FiUpload, FiDownload, FiEye, FiImage, FiCopy, FiClipboard, FiFolder, FiLink, FiMove, FiBookOpen, FiCalendar, FiClock, FiCheckSquare, FiSquare, FiTag } = FiIcons;
+
+const CONTENT_TYPES = [
+  { id: 'explanation', label: 'Erklärtext', icon: FiEdit3 },
+  { id: 'video', label: 'Video', icon: FiImage },
+  { id: 'podcast', label: 'Podcast', icon: FiImage },
+  { id: 'quiz', label: 'Quiz', icon: FiTarget },
+];
 
 const MasterDataTab = ({ unit }) => {
   const { updateLearningUnit, topics, getTopic, getTopicPath, currentUser } = useLearningUnits();
@@ -17,6 +25,7 @@ const MasterDataTab = ({ unit }) => {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [pendingImageData, setPendingImageData] = useState(null);
   const [isImageUploading, setIsImageUploading] = useState(false);
+  const [customContentType, setCustomContentType] = useState('');
   const fileInputRef = useRef(null);
   const xmlImportInputRef = useRef(null);
 
@@ -26,6 +35,55 @@ const MasterDataTab = ({ unit }) => {
 
   const handleBasicInfoChange = (field, value) => {
     handleUpdate({ [field]: value });
+  };
+
+  // Tags Management
+  const handleTagsChange = (newTags) => {
+    handleUpdate({ tags: newTags });
+  };
+
+  // Content Types Management
+  const handleContentTypeChange = (typeId, checked) => {
+    const currentTypes = unit.contentTypes || [];
+    let updatedTypes;
+
+    if (checked) {
+      updatedTypes = [...currentTypes, typeId];
+    } else {
+      updatedTypes = currentTypes.filter(type => type !== typeId);
+    }
+
+    handleUpdate({ contentTypes: updatedTypes });
+  };
+
+  const handleCustomContentTypeAdd = () => {
+    if (!customContentType.trim()) return;
+
+    const currentTypes = unit.contentTypes || [];
+    const customTypes = unit.customContentTypes || [];
+
+    const newCustomType = {
+      id: `custom_${uuidv4()}`,
+      label: customContentType.trim(),
+      isCustom: true
+    };
+
+    handleUpdate({
+      contentTypes: [...currentTypes, newCustomType.id],
+      customContentTypes: [...customTypes, newCustomType]
+    });
+
+    setCustomContentType('');
+  };
+
+  const handleCustomContentTypeRemove = (typeId) => {
+    const currentTypes = unit.contentTypes || [];
+    const customTypes = unit.customContentTypes || [];
+
+    handleUpdate({
+      contentTypes: currentTypes.filter(type => type !== typeId),
+      customContentTypes: customTypes.filter(type => type.id !== typeId)
+    });
   };
 
   // Helper function to generate unique filename with sequential numbering
@@ -250,6 +308,9 @@ const MasterDataTab = ({ unit }) => {
         explanationComments: unit.explanationComments || [],
         speechTextComments: unit.speechTextComments || [],
         targetDate: unit.targetDate || null,
+        tags: unit.tags || [],
+        contentTypes: unit.contentTypes || [],
+        customContentTypes: unit.customContentTypes || [],
         createdAt: unit.createdAt,
         updatedAt: unit.updatedAt
       };
@@ -303,6 +364,9 @@ const MasterDataTab = ({ unit }) => {
             explanationComments: importedData.explanationComments || [],
             speechTextComments: importedData.speechTextComments || [],
             targetDate: importedData.targetDate || unit.targetDate,
+            tags: importedData.tags || [],
+            contentTypes: importedData.contentTypes || [],
+            customContentTypes: importedData.customContentTypes || [],
             updatedAt: new Date().toISOString()
           };
 
@@ -319,7 +383,7 @@ const MasterDataTab = ({ unit }) => {
     event.target.value = '';
   };
 
-  // Helper function to create XML from data - Enhanced with comments
+  // Helper function to create XML from data - Enhanced with comments, tags and content types
   const createXmlFromData = (data) => {
     const escapeXml = (str) => {
       if (!str) return '';
@@ -343,6 +407,33 @@ const MasterDataTab = ({ unit }) => {
     xml += `    <erstellt_am>${escapeXml(data.createdAt)}</erstellt_am>\n`;
     xml += `    <aktualisiert_am>${escapeXml(data.updatedAt)}</aktualisiert_am>\n`;
     xml += `  </grunddaten>\n`;
+
+    // Tags
+    xml += `  <tags>\n`;
+    (data.tags || []).forEach(tag => {
+      xml += `    <tag id="${escapeXml(tag.id)}">\n`;
+      xml += `      <label>${escapeXml(tag.label)}</label>\n`;
+      xml += `      <color>${escapeXml(tag.color)}</color>\n`;
+      xml += `      <erstellt_am>${escapeXml(tag.createdAt)}</erstellt_am>\n`;
+      xml += `    </tag>\n`;
+    });
+    xml += `  </tags>\n`;
+
+    // Content Types
+    xml += `  <inhaltstypen>\n`;
+    (data.contentTypes || []).forEach(typeId => {
+      xml += `    <typ>${escapeXml(typeId)}</typ>\n`;
+    });
+    xml += `  </inhaltstypen>\n`;
+
+    // Custom Content Types
+    xml += `  <benutzerdefinierte_inhaltstypen>\n`;
+    (data.customContentTypes || []).forEach(customType => {
+      xml += `    <typ id="${escapeXml(customType.id)}">\n`;
+      xml += `      <label>${escapeXml(customType.label)}</label>\n`;
+      xml += `    </typ>\n`;
+    });
+    xml += `  </benutzerdefinierte_inhaltstypen>\n`;
 
     xml += `  <lernziele>\n`;
     data.learningGoals.forEach(goal => {
@@ -395,7 +486,7 @@ const MasterDataTab = ({ unit }) => {
     return xml;
   };
 
-  // Helper function to parse XML to data - Enhanced with comments
+  // Helper function to parse XML to data - Enhanced with comments, tags and content types
   const parseXmlToData = (xmlContent) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
@@ -423,8 +514,40 @@ const MasterDataTab = ({ unit }) => {
       textSnippets: [],
       comments: [],
       explanationComments: [],
-      speechTextComments: []
+      speechTextComments: [],
+      tags: [],
+      contentTypes: [],
+      customContentTypes: []
     };
+
+    // Parse tags
+    const tags = xmlDoc.querySelectorAll('tags tag');
+    tags.forEach(tagElement => {
+      const tag = {
+        id: tagElement.getAttribute('id') || uuidv4(),
+        label: tagElement.querySelector('label')?.textContent || '',
+        color: tagElement.querySelector('color')?.textContent || '#3B82F6',
+        createdAt: tagElement.querySelector('erstellt_am')?.textContent || new Date().toISOString()
+      };
+      data.tags.push(tag);
+    });
+
+    // Parse content types
+    const contentTypes = xmlDoc.querySelectorAll('inhaltstypen typ');
+    contentTypes.forEach(typeElement => {
+      data.contentTypes.push(typeElement.textContent);
+    });
+
+    // Parse custom content types
+    const customContentTypes = xmlDoc.querySelectorAll('benutzerdefinierte_inhaltstypen typ');
+    customContentTypes.forEach(customTypeElement => {
+      const customType = {
+        id: customTypeElement.getAttribute('id') || uuidv4(),
+        label: customTypeElement.querySelector('label')?.textContent || '',
+        isCustom: true
+      };
+      data.customContentTypes.push(customType);
+    });
 
     // Parse learning goals
     const lernziele = xmlDoc.querySelectorAll('lernziele lernziel');
@@ -621,7 +744,7 @@ const MasterDataTab = ({ unit }) => {
           </div>
         </div>
         <p className="text-sm text-blue-800 dark:text-blue-200">
-          <strong>Export:</strong> Lädt alle Texte, URLs, Snippets und Kommentare als XML-Datei herunter (ohne Bilder, Videos oder PowerPoint-Dateien).
+          <strong>Export:</strong> Lädt alle Texte, URLs, Snippets, Tags und Kommentare als XML-Datei herunter (ohne Bilder, Videos oder PowerPoint-Dateien).
           <br />
           <strong>Import:</strong> Ersetzt die aktuellen Daten durch die Inhalte einer XML-Datei.
         </p>
@@ -766,6 +889,115 @@ const MasterDataTab = ({ unit }) => {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Das Zieldatum wird rot angezeigt, wenn die Lerneinheit bis dahin nicht fertiggestellt ist.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tags Management */}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+        <div className="flex items-center mb-4">
+          <SafeIcon icon={FiTag} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Tags</h3>
+        </div>
+        <TagsManager
+          tags={unit.tags || []}
+          onChange={handleTagsChange}
+        />
+      </div>
+
+      {/* Content Types */}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+        <div className="flex items-center mb-4">
+          <SafeIcon icon={FiBookOpen} className="h-5 w-5 text-primary-600 dark:text-primary-400 mr-2" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Zu erstellende Inhalte</h3>
+        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Wählen Sie aus, welche Arten von Inhalten für diese Lerneinheit erstellt werden sollen.
+        </p>
+        
+        <div className="space-y-3">
+          {/* Predefined Content Types */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {CONTENT_TYPES.map((contentType) => (
+              <label key={contentType.id} className="flex items-center p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={(unit.contentTypes || []).includes(contentType.id)}
+                  onChange={(e) => handleContentTypeChange(contentType.id, e.target.checked)}
+                  className="sr-only"
+                />
+                <div className="flex items-center">
+                  <SafeIcon 
+                    icon={(unit.contentTypes || []).includes(contentType.id) ? FiCheckSquare : FiSquare} 
+                    className={`h-5 w-5 mr-3 ${
+                      (unit.contentTypes || []).includes(contentType.id) 
+                        ? 'text-primary-600 dark:text-primary-400' 
+                        : 'text-gray-400 dark:text-gray-500'
+                    }`} 
+                  />
+                  <SafeIcon icon={contentType.icon} className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
+                  <span className="text-gray-900 dark:text-white font-medium">{contentType.label}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          {/* Custom Content Types */}
+          {unit.customContentTypes && unit.customContentTypes.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Benutzerdefinierte Inhalte</h4>
+              <div className="space-y-2">
+                {unit.customContentTypes.map((customType) => (
+                  <label key={customType.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center cursor-pointer flex-1">
+                      <input
+                        type="checkbox"
+                        checked={(unit.contentTypes || []).includes(customType.id)}
+                        onChange={(e) => handleContentTypeChange(customType.id, e.target.checked)}
+                        className="sr-only"
+                      />
+                      <SafeIcon 
+                        icon={(unit.contentTypes || []).includes(customType.id) ? FiCheckSquare : FiSquare} 
+                        className={`h-5 w-5 mr-3 ${
+                          (unit.contentTypes || []).includes(customType.id) 
+                            ? 'text-primary-600 dark:text-primary-400' 
+                            : 'text-gray-400 dark:text-gray-500'
+                        }`} 
+                      />
+                      <span className="text-gray-900 dark:text-white font-medium">{customType.label}</span>
+                    </div>
+                    <button
+                      onClick={() => handleCustomContentTypeRemove(customType.id)}
+                      className="ml-2 p-1 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded transition-colors"
+                      title="Entfernen"
+                    >
+                      <SafeIcon icon={FiTrash2} className="h-4 w-4" />
+                    </button>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add Custom Content Type */}
+          <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={customContentType}
+                onChange={(e) => setCustomContentType(e.target.value)}
+                placeholder="Benutzerdefinierten Inhaltstyp hinzufügen..."
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                onKeyPress={(e) => e.key === 'Enter' && handleCustomContentTypeAdd()}
+              />
+              <button
+                onClick={handleCustomContentTypeAdd}
+                disabled={!customContentType.trim()}
+                className="inline-flex items-center px-3 py-2 bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                <SafeIcon icon={FiPlus} className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -42,14 +42,19 @@ export const repairDatabaseSchema = async () => {
           
           // Method 2: Try using Supabase management API
           try {
-            const response = await fetch(`https://api.supabase.com/v1/projects/klmwjwwkyjsmtjycuiaf/database/query`, {
+            // Get the Supabase URL from the client
+            const supabaseUrl = supabase.supabaseUrl;
+            const supabaseKey = supabase.supabaseKey;
+            
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                'Authorization': `Bearer ${supabaseKey}`,
+                'apikey': supabaseKey
               },
               body: JSON.stringify({
-                query: 'ALTER TABLE topics_sb2024 ADD COLUMN IF NOT EXISTS owner_id UUID;'
+                sql: 'ALTER TABLE topics_sb2024 ADD COLUMN IF NOT EXISTS owner_id UUID;'
               })
             });
             

@@ -5,7 +5,7 @@ import { useLearningUnits, EDITORIAL_STATES } from '../context/LearningUnitConte
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiFilter, FiFileText, FiBook, FiPackage, FiFolder, FiTarget, FiCalendar, FiClock } = FiIcons;
+const { FiFilter, FiFileText, FiBook, FiPackage, FiFolder, FiTarget, FiCalendar, FiClock, FiTag } = FiIcons;
 
 const ITEM_TYPE = 'LEARNING_UNIT';
 
@@ -27,6 +27,13 @@ const KanbanCard = ({ unit, onClick }) => {
     return isOverdue && isNotReady;
   };
 
+  const getTagStyle = (color) => {
+    return {
+      backgroundColor: color,
+      color: '#FFFFFF'
+    };
+  };
+
   return (
     <div
       ref={drag}
@@ -43,6 +50,26 @@ const KanbanCard = ({ unit, onClick }) => {
         <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
           {unit.description}
         </p>
+      )}
+
+      {/* Tags */}
+      {unit.tags && unit.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {unit.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+              style={getTagStyle(tag.color)}
+            >
+              {tag.label}
+            </span>
+          ))}
+          {unit.tags.length > 3 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+              +{unit.tags.length - 3}
+            </span>
+          )}
+        </div>
       )}
 
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
@@ -136,47 +163,70 @@ const KanbanBoard = () => {
   } = useLearningUnits();
 
   const [filter, setFilter] = useState({ type: 'all', id: null });
+  const [tagFilter, setTagFilter] = useState('');
+
+  // Get all unique tags for filter dropdown
+  const allTags = useMemo(() => {
+    const tagMap = new Map();
+    learningUnits.forEach(unit => {
+      (unit.tags || []).forEach(tag => {
+        tagMap.set(tag.id, tag);
+      });
+    });
+    return Array.from(tagMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [learningUnits]);
 
   const filteredUnits = useMemo(() => {
-    if (filter.type === 'all') {
-      return learningUnits;
+    let units = learningUnits;
+
+    // Apply hierarchy filter
+    if (filter.type !== 'all') {
+      switch (filter.type) {
+        case 'subject':
+          const subjectTrainings = trainings.filter(t => t.subjectId === filter.id);
+          const subjectModules = trainingModules.filter(m => 
+            subjectTrainings.some(t => t.id === m.trainingId)
+          );
+          const subjectTopics = topics.filter(topic => 
+            subjectModules.some(m => m.id === topic.trainingModuleId)
+          );
+          units = units.filter(unit => 
+            subjectTopics.some(topic => topic.id === unit.topicId)
+          );
+          break;
+
+        case 'training':
+          const trainingModulesFiltered = trainingModules.filter(m => m.trainingId === filter.id);
+          const trainingTopics = topics.filter(topic => 
+            trainingModulesFiltered.some(m => m.id === topic.trainingModuleId)
+          );
+          units = units.filter(unit => 
+            trainingTopics.some(topic => topic.id === unit.topicId)
+          );
+          break;
+
+        case 'module':
+          const moduleTopics = topics.filter(topic => topic.trainingModuleId === filter.id);
+          units = units.filter(unit => 
+            moduleTopics.some(topic => topic.id === unit.topicId)
+          );
+          break;
+
+        case 'topic':
+          units = units.filter(unit => unit.topicId === filter.id);
+          break;
+      }
     }
 
-    switch (filter.type) {
-      case 'subject':
-        const subjectTrainings = trainings.filter(t => t.subjectId === filter.id);
-        const subjectModules = trainingModules.filter(m => 
-          subjectTrainings.some(t => t.id === m.trainingId)
-        );
-        const subjectTopics = topics.filter(topic => 
-          subjectModules.some(m => m.id === topic.trainingModuleId)
-        );
-        return learningUnits.filter(unit => 
-          subjectTopics.some(topic => topic.id === unit.topicId)
-        );
-
-      case 'training':
-        const trainingModulesFiltered = trainingModules.filter(m => m.trainingId === filter.id);
-        const trainingTopics = topics.filter(topic => 
-          trainingModulesFiltered.some(m => m.id === topic.trainingModuleId)
-        );
-        return learningUnits.filter(unit => 
-          trainingTopics.some(topic => topic.id === unit.topicId)
-        );
-
-      case 'module':
-        const moduleTopics = topics.filter(topic => topic.trainingModuleId === filter.id);
-        return learningUnits.filter(unit => 
-          moduleTopics.some(topic => topic.id === unit.topicId)
-        );
-
-      case 'topic':
-        return learningUnits.filter(unit => unit.topicId === filter.id);
-
-      default:
-        return learningUnits;
+    // Apply tag filter
+    if (tagFilter) {
+      units = units.filter(unit => 
+        (unit.tags || []).some(tag => tag.id === tagFilter)
+      );
     }
-  }, [learningUnits, filter, trainings, trainingModules, topics]);
+
+    return units;
+  }, [learningUnits, filter, tagFilter, trainings, trainingModules, topics]);
 
   const groupedUnits = useMemo(() => {
     const groups = {};
@@ -215,18 +265,40 @@ const KanbanBoard = () => {
     }
   };
 
+  const getSelectedTag = () => {
+    return allTags.find(tag => tag.id === tagFilter);
+  };
+
+  const getTagStyle = (color) => {
+    return {
+      backgroundColor: color,
+      color: '#FFFFFF'
+    };
+  };
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Kanban Board</h2>
 
-          {/* Filter Dropdown */}
+          {/* Filter Controls */}
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <SafeIcon icon={FiFilter} className="h-4 w-4 text-gray-500 dark:text-gray-400" />
               <span className="text-sm text-gray-700 dark:text-gray-300">Filter: {getFilterLabel()}</span>
+              {getSelectedTag() && (
+                <span
+                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                  style={getTagStyle(getSelectedTag().color)}
+                >
+                  <SafeIcon icon={FiTag} className="h-3 w-3 mr-1" />
+                  {getSelectedTag().label}
+                </span>
+              )}
             </div>
+            
+            {/* Hierarchy Filter */}
             <select
               value={`${filter.type}:${filter.id || ''}`}
               onChange={(e) => {
@@ -265,6 +337,22 @@ const KanbanBoard = () => {
                 ))}
               </optgroup>
             </select>
+
+            {/* Tag Filter */}
+            {allTags.length > 0 && (
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              >
+                <option value="">Alle Tags</option>
+                {allTags.map(tag => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -292,9 +380,9 @@ const KanbanBoard = () => {
               Keine Lerneinheiten gefunden
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {filter.type === 'all' 
+              {filter.type === 'all' && !tagFilter
                 ? 'Erstellen Sie Ihre erste Lerneinheit.' 
-                : 'Keine Lerneinheiten für den ausgewählten Filter gefunden.'
+                : 'Keine Lerneinheiten für die ausgewählten Filter gefunden.'
               }
             </p>
           </div>
